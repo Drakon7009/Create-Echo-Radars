@@ -48,6 +48,17 @@ public final class SonarRotation {
         return advance(angle, Math.copySign(lookAhead, angularSpeed));
     }
 
+    /**
+     * Limits the distance a mechanical sweep travels between new display data.
+     * Slow shafts keep the normal five-tick cadence; fast shafts publish fresh
+     * monitor snapshots more often, down to once per game tick.
+     */
+    public static int mechanicalUpdateIntervalTicks(float angularSpeed) {
+        float speed = Math.abs(angularSpeed);
+        if (speed < MINIMUM_ANGULAR_SPEED) return 5;
+        return Math.max(1, Math.min(5, (int) Math.floor(20f / speed)));
+    }
+
     public static float directedDistance(float fromAngle, float toAngle, float angularSpeed) {
         if (angularSpeed > MINIMUM_ANGULAR_SPEED) return wrap(toAngle - fromAngle);
         if (angularSpeed < -MINIMUM_ANGULAR_SPEED) return wrap(fromAngle - toAngle);
@@ -120,7 +131,7 @@ public final class SonarRotation {
     }
 
     private static double automaticFadeInTicks(double speed, double revolutionTicks) {
-        double revealTicks = Math.max(0.25,
+        double revealTicks = Math.max(1,
                 Math.min(2, MECHANICAL_REVEAL_DEGREES / speed));
         return Math.min(revealTicks, revolutionTicks * 0.1);
     }

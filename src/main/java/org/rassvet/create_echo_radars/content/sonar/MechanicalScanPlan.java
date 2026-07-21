@@ -1,5 +1,7 @@
 package org.rassvet.create_echo_radars.content.sonar;
 
+import net.minecraft.world.phys.Vec3;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,5 +27,27 @@ public final class MechanicalScanPlan {
             }
         }
         return List.copyOf(leaves);
+    }
+
+    static float absoluteBearing(SonarAdaptiveTracePlan.Leaf leaf, float mechanicalAngle,
+                                 SonarAdaptiveTracePlan.Settings settings) {
+        return SonarRotation.wrap((float) (mechanicalAngle
+                + SonarAdaptiveTracePlan.bearing(leaf, settings)));
+    }
+
+    static SonarOrientation sampleOrientation(SonarOrientation displayOrientation,
+                                              float absoluteBearing, int tiltAngle) {
+        SonarOrientation unTilted = new SonarOrientation(
+                displayOrientation.direction(absoluteBearing, 0),
+                displayOrientation.direction(absoluteBearing + 90, 0),
+                displayOrientation.up());
+        return SonarBlockEntity.applyTilt(unTilted, tiltAngle);
+    }
+
+    static Vec3 emitterOrigin(Vec3 rotationCenter, SonarOrientation displayOrientation,
+                              float absoluteBearing) {
+        Vec3 radialDirection = displayOrientation.direction(absoluteBearing, 0);
+        return rotationCenter.add(radialDirection.scale(
+                SonarRotation.mechanicalEmitterDistance(absoluteBearing)));
     }
 }

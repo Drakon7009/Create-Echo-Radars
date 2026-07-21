@@ -8,6 +8,7 @@ import org.rassvet.create_echo_radars.content.sonar.SonarDisplayLayout;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorDimensions;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorSnapshot;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorExtension;
+import org.rassvet.create_echo_radars.content.sonar.SonarRotation;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -74,6 +75,26 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     @Inject(method = "tick", at = @At(value = "INVOKE",
             target = "Lcom/happysg/radar/block/monitor/MonitorBlockEntity;sendData()V"))
     private void createEchoRadars$updateServerSnapshot(CallbackInfo ci) {
+        createEchoRadars$refreshServerSnapshot();
+    }
+
+    @Inject(method = "tick", at = @At("TAIL"))
+    private void createEchoRadars$sendFastMechanicalSnapshot(CallbackInfo ci) {
+        MonitorBlockEntity self = (MonitorBlockEntity) (Object) this;
+        if (!(self.getLevel() instanceof ServerLevel level) || !self.isController()) return;
+        if (level.getGameTime() % 5 == 0 || radarPos == null) return;
+        if (!(level.getBlockEntity(radarPos) instanceof SonarBlockEntity sonar)
+                || sonar.getSonarType() != org.rassvet.create_echo_radars.content.sonar.SonarType.MECHANICAL_IMAGING_C)
+            return;
+        int interval = SonarRotation.mechanicalUpdateIntervalTicks(sonar.mechanicalAngularSpeed());
+        if (interval >= 5 || level.getGameTime() % interval != 0) return;
+
+        createEchoRadars$refreshServerSnapshot();
+        self.sendData();
+    }
+
+    @Unique
+    private void createEchoRadars$refreshServerSnapshot() {
         MonitorBlockEntity self = (MonitorBlockEntity) (Object) this;
         if (!(self.getLevel() instanceof ServerLevel level) || !self.isController()) return;
         SonarScanManager manager = SonarScanManager.get(level);
