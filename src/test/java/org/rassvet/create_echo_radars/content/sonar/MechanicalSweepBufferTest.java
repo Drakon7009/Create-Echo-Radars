@@ -83,6 +83,25 @@ class MechanicalSweepBufferTest {
     }
 
     @Test
+    void prefetchedSectorWaitsForTheSweepAndActivatesAtTheCrossing() {
+        MechanicalSweepBuffer<String, String> buffer = buffer();
+        buffer.advanceSweep(0, 10, 0);
+        buffer.queue(1, 40, Map.of("ahead", "ahead"));
+
+        buffer.advanceSweep(30, 10, 3);
+        assertFalse(buffer.hasVisibleSector(40));
+
+        buffer.advanceSweep(50, 10, 5);
+        assertTrue(buffer.hasVisibleSector(40));
+        MechanicalSweepBuffer.VisibleValue<String> value =
+                buffer.visibleValues().iterator().next();
+        assertEquals(4, value.activatedTick(), 1.0e-5);
+        float halfwayVisible = SonarRotation.mechanicalPixelAlpha(
+                0, value.activatedTick(), 4.5, 10);
+        assertTrue(halfwayVisible > 0 && halfwayVisible < 1);
+    }
+
+    @Test
     void backwardNetworkCorrectionDoesNotLookLikeAFullRevolution() {
         MechanicalSweepBuffer<String, String> buffer = buffer();
         buffer.replaceSector(0, Map.of("zero", "zero"), 0);

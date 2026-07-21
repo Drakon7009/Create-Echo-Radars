@@ -7,7 +7,7 @@ import java.util.List;
 
 /**
  * Keeps every recently completed mechanical scan batch long enough for the
- * five-tick monitor synchronization to observe it.
+ * monitor synchronization to observe it.
  */
 public final class MechanicalFrameWindow<T> {
     private final long retentionTicks;

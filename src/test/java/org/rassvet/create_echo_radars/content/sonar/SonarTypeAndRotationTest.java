@@ -44,6 +44,17 @@ class SonarTypeAndRotationTest {
         assertEquals(40, SonarRotation.prefetchAngle(0, 5, 2, 8, 120), 1.0e-5f);
         assertEquals(320, SonarRotation.prefetchAngle(0, -5, 2, 8, 120), 1.0e-5f);
         assertEquals(120, SonarRotation.prefetchAngle(0, 20, 2, 8, 120), 1.0e-5f);
+        assertEquals(115.2f, SonarRotation.prefetchAngle(0, 19.2f, 2, 6, 120), 1.0e-4f);
+    }
+
+    @Test
+    void mechanicalUpdateCadenceAcceleratesWithShaftSpeed() {
+        assertEquals(5, SonarRotation.mechanicalUpdateIntervalTicks(0));
+        assertEquals(5, SonarRotation.mechanicalUpdateIntervalTicks(4));
+        assertEquals(4, SonarRotation.mechanicalUpdateIntervalTicks(4.8f));
+        assertEquals(2, SonarRotation.mechanicalUpdateIntervalTicks(9.6f));
+        assertEquals(1, SonarRotation.mechanicalUpdateIntervalTicks(19.2f));
+        assertEquals(1, SonarRotation.mechanicalUpdateIntervalTicks(-19.2f));
     }
 
     @Test
@@ -67,6 +78,21 @@ class SonarTypeAndRotationTest {
                         leaf.angularResolutionDegrees(), 1.0e-5);
             }
         }
+    }
+
+    @Test
+    void prefetchedMechanicalRayKeepsTheSameWorldBearingAcrossBatches() {
+        SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
+                128, 120, 60, 8, 1, 4, 0);
+        SonarAdaptiveTracePlan.Leaf firstBatch = MechanicalScanPlan.createLeaves(
+                java.util.List.of(90f), 0, settings).getFirst();
+        SonarAdaptiveTracePlan.Leaf secondBatch = MechanicalScanPlan.createLeaves(
+                java.util.List.of(90f), 40, settings).getFirst();
+
+        float firstBearing = MechanicalScanPlan.absoluteBearing(firstBatch, 0, settings);
+        float secondBearing = MechanicalScanPlan.absoluteBearing(secondBatch, 40, settings);
+        assertEquals(90, firstBearing, 1.0e-5f);
+        assertEquals(firstBearing, secondBearing, 1.0e-5f);
     }
 
     @Test
@@ -103,11 +129,11 @@ class SonarTypeAndRotationTest {
         assertEquals(0, SonarRotation.mechanicalPixelAlpha(0,
                 0, 0, 10), 1.0e-5f);
         float duringFade = SonarRotation.mechanicalPixelAlpha(0,
-                0, 0.1, 10);
+                0, 0.5, 10);
         assertTrue(duringFade > 0 && duringFade < 1);
         float afterFadeIn = SonarRotation.mechanicalPixelAlpha(0,
                 0, 1, 10);
-        assertTrue(afterFadeIn > 0.9f && afterFadeIn < 1);
+        assertEquals(1, afterFadeIn, 1.0e-5f);
     }
 
     @Test

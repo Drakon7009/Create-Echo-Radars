@@ -28,7 +28,7 @@ import java.util.concurrent.CompletionException;
 
 public final class SonarScanManager {
     private static final int SCAN_TIMEOUT_TICKS = 600;
-    private static final float MECHANICAL_PREFETCH_TICKS = 8;
+    private static final float MECHANICAL_PREFETCH_TICKS = 6;
     private static final float MECHANICAL_MAX_PREFETCH_DEGREES = 120;
     private static final int MECHANICAL_COMPLETED_FRAME_RETENTION_TICKS = 20;
     private static final int MECHANICAL_COMPLETED_FRAME_LIMIT = 32;
@@ -266,10 +266,13 @@ public final class SonarScanManager {
             if (holding) {
                 if (descriptor.type == SonarType.MECHANICAL_IMAGING_C) {
                     if (now >= holdUntil) startScan(now);
-                } else if (now >= holdUntil && (descriptor.type != SonarType.SIDE_SCAN_D
-                         || lastSideScanOrigin == null
-                         || descriptor.origin.distanceTo(lastSideScanOrigin) >= 0.5)) startScan(now);
-                return;
+                    else return;
+                } else {
+                    if (now >= holdUntil && (descriptor.type != SonarType.SIDE_SCAN_D
+                            || lastSideScanOrigin == null
+                            || descriptor.origin.distanceTo(lastSideScanOrigin) >= 0.5)) startScan(now);
+                    return;
+                }
             }
 
             completeActiveBatch();
@@ -473,7 +476,8 @@ public final class SonarScanManager {
             float bearing = (float) SonarAdaptiveTracePlan.bearing(ray.leaf, settings);
             float elevation = (float) SonarAdaptiveTracePlan.pitch(ray.leaf, settings);
             if (scanDescriptor.type == SonarType.MECHANICAL_IMAGING_C) {
-                bearing = wrapBearing(bearing + scanDescriptor.mechanicalAngle);
+                bearing = MechanicalScanPlan.absoluteBearing(ray.leaf,
+                        scanDescriptor.mechanicalAngle, settings);
             }
             float angularResolution = ray.leaf.angularResolutionDegrees() > 0
                     ? (float) ray.leaf.angularResolutionDegrees()
@@ -772,11 +776,6 @@ public final class SonarScanManager {
         return Math.max(min, Math.min(max, value));
     }
 
-    private static float wrapBearing(float value) {
-        float wrapped = value % 360f;
-        return wrapped < 0 ? wrapped + 360f : wrapped;
-    }
-
         private record Descriptor(BlockPos pos, Vec3 origin, Vec3 displayOrigin,
                                Vec3 forward, Vec3 right, Vec3 up,
                                Vec3 displayForward, Vec3 displayRight, Vec3 displayUp,
@@ -826,11 +825,29 @@ public final class SonarScanManager {
             SonarAdaptiveTracePlan.Settings settings = descriptor.traceSettings();
             double bearing = SonarAdaptiveTracePlan.bearing(leaf, settings);
             double pitch = SonarAdaptiveTracePlan.pitch(leaf, settings);
+            if (descriptor.type == SonarType.MECHANICAL_IMAGING_C) {
+                SonarOrientation displayOrientation = new SonarOrientation(
+                        descriptor.displayForward, descriptor.displayRight, descriptor.displayUp);
+                float absoluteBearing = MechanicalScanPlan.absoluteBearing(
+                        leaf, descriptor.mechanicalAngle, settings);
+                SonarOrientation sampleOrientation = MechanicalScanPlan.sampleOrientation(
+                        displayOrientation, absoluteBearing, descriptor.tiltAngle);
+                return sampleOrientation.direction(0, pitch);
+            }
             return new SonarOrientation(descriptor.forward,
                     descriptor.right, descriptor.up).direction(bearing, pitch);
         }
 
         private Vec3 origin(Descriptor descriptor) {
+            if (descriptor.type == SonarType.MECHANICAL_IMAGING_C) {
+                SonarAdaptiveTracePlan.Settings settings = descriptor.traceSettings();
+                float absoluteBearing = MechanicalScanPlan.absoluteBearing(
+                        leaf, descriptor.mechanicalAngle, settings);
+                SonarOrientation displayOrientation = new SonarOrientation(
+                        descriptor.displayForward, descriptor.displayRight, descriptor.displayUp);
+                return MechanicalScanPlan.emitterOrigin(
+                        descriptor.displayOrigin, displayOrientation, absoluteBearing);
+            }
             if (descriptor.type != SonarType.SIDE_SCAN_D) return descriptor.origin;
             double side = leaf.bearingOffset() < 0 ? -0.501 : 0.501;
             return descriptor.origin.add(descriptor.right.scale(side));
