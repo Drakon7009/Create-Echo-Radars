@@ -1,0 +1,1 @@
+{"variants":{"facing=north":{"model":"create_echo_radars:block/echo_sounder"},"facing=east":{"model":"create_echo_radars:block/echo_sounder","y":90},"facing=south":{"model":"create_echo_radars:block/echo_sounder","y":180},"facing=west":{"model":"create_echo_radars:block/echo_sounder","y":270}}}

@@ -1,0 +1,1 @@
+{"type":"minecraft:block","pools":[{"rolls":1,"entries":[{"type":"minecraft:item","name":"create_echo_radars:echo_sounder"}],"conditions":[{"condition":"minecraft:survives_explosion"}]}]}

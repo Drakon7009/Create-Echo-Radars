@@ -1,0 +1,8 @@
+{
+  "parent":"minecraft:block/block",
+  "textures":{"body":"create_echo_radars:block/sonar","shaft":"minecraft:block/polished_deepslate","particle":"create_echo_radars:block/sonar"},
+  "elements":[
+    {"from":[2,0,2],"to":[14,6,14],"faces":{"down":{"texture":"#body"},"up":{"texture":"#body"},"north":{"texture":"#body"},"south":{"texture":"#body"},"west":{"texture":"#body"},"east":{"texture":"#body"}}},
+    {"from":[7,6,7],"to":[9,12,9],"faces":{"down":{"texture":"#shaft"},"up":{"texture":"#shaft"},"north":{"texture":"#shaft"},"south":{"texture":"#shaft"},"west":{"texture":"#shaft"},"east":{"texture":"#shaft"}}}
+  ]
+}

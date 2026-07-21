@@ -1,0 +1,1 @@
+{"variants":{"facing=north":{"model":"create_echo_radars:block/side_scan_sonar"},"facing=east":{"model":"create_echo_radars:block/side_scan_sonar","y":90},"facing=south":{"model":"create_echo_radars:block/side_scan_sonar","y":180},"facing=west":{"model":"create_echo_radars:block/side_scan_sonar","y":270}}}

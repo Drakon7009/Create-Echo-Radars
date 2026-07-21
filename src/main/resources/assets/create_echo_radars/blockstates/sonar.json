@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "create_echo_radars:block/sonar" },
+    "facing=east": { "model": "create_echo_radars:block/sonar", "y": 90 },
+    "facing=south": { "model": "create_echo_radars:block/sonar", "y": 180 },
+    "facing=west": { "model": "create_echo_radars:block/sonar", "y": 270 }
+  }
+}

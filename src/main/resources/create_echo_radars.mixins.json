@@ -1,0 +1,21 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "org.rassvet.create_echo_radars.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "DataLinkBlockItemMixin",
+    "MonitorBlockEntityMixin",
+    "MonitorInputHandlerMixin"
+  ],
+  "client": [
+    "MonitorBlockClientMixin",
+    "MonitorRendererMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "overwrites": {
+    "requireAnnotations": true
+  }
+}

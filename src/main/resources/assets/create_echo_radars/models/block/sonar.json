@@ -1,0 +1,39 @@
+{
+  "parent": "minecraft:block/cube",
+  "textures": {
+    "particle": "create_echo_radars:block/sonar",
+    "down": "create_echo_radars:block/sonar",
+    "up": "create_echo_radars:block/sonar",
+    "north": "create_echo_radars:block/sonar",
+    "south": "create_echo_radars:block/sonar",
+    "west": "create_echo_radars:block/sonar",
+    "east": "create_echo_radars:block/sonar",
+    "nose": "minecraft:block/polished_deepslate"
+  },
+  "elements": [
+    {
+      "from": [2, 2, 3],
+      "to": [14, 14, 14],
+      "faces": {
+        "down": { "texture": "#down", "cullface": "down" },
+        "up": { "texture": "#up", "cullface": "up" },
+        "north": { "texture": "#north" },
+        "south": { "texture": "#south", "cullface": "south" },
+        "west": { "texture": "#west" },
+        "east": { "texture": "#east" }
+      }
+    },
+    {
+      "from": [2.24, 7.52, 0.64],
+      "to": [13.76, 11.04, 3.2],
+      "faces": {
+        "down": { "texture": "#nose" },
+        "up": { "texture": "#nose" },
+        "north": { "texture": "#nose" },
+        "south": { "texture": "#nose" },
+        "west": { "texture": "#nose" },
+        "east": { "texture": "#nose" }
+      }
+    }
+  ]
+}

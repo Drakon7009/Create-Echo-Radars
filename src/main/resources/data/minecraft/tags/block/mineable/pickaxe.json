@@ -1,0 +1,9 @@
+{
+  "replace": false,
+  "values": [
+    "create_echo_radars:sonar",
+    "create_echo_radars:echo_sounder",
+    "create_echo_radars:mechanical_scanning_sonar",
+    "create_echo_radars:side_scan_sonar"
+  ]
+}

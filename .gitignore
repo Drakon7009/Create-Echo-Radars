@@ -1,0 +1,18 @@
+# Gradle build state and generated outputs
+.gradle/
+build/
+
+# Development-run data created by NeoForge
+run/
+
+# IDE and local agent state
+.idea/
+.vscode/
+.agents/
+.codex/
+
+# External projects intentionally not part of this mod
+sonar_simulation/
+Create-Radar-master/
+GeneratorAccelerator-*/
+sable-main/

@@ -1,0 +1,19 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "CEC",
+    "CPC",
+    "CSC"
+  ],
+  "key": {
+    "C": { "item": "minecraft:copper_ingot" },
+    "E": { "item": "create:electron_tube" },
+    "P": { "item": "create:precision_mechanism" },
+    "S": { "item": "create:shaft" }
+  },
+  "result": {
+    "id": "create_echo_radars:sonar",
+    "count": 1
+  }
+}
