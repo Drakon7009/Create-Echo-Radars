@@ -15,6 +15,33 @@ class SonarTypeAndRotationTest {
     }
 
     @Test
+    void sideScanUsesTwoEmittersOutsideTheBlockAndAimsDownwardToBothSides() {
+        SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
+                128, 3, 60, 31, 3, 4, 0);
+        java.util.List<SonarAdaptiveTracePlan.Leaf> leaves =
+                SideScanGeometry.createLeaves(31, 3);
+
+        assertEquals(5 * 3 * 2, leaves.size());
+        assertTrue(leaves.stream().anyMatch(leaf ->
+                SideScanGeometry.emitterSideOffset(leaf) < -0.5
+                        && SonarAdaptiveTracePlan.bearing(leaf, settings) < -88
+                        && SonarAdaptiveTracePlan.pitch(leaf, settings) < 0));
+        assertTrue(leaves.stream().anyMatch(leaf ->
+                SideScanGeometry.emitterSideOffset(leaf) > 0.5
+                        && SonarAdaptiveTracePlan.bearing(leaf, settings) > 88
+                        && SonarAdaptiveTracePlan.pitch(leaf, settings) < 0));
+    }
+
+    @Test
+    void sideScanRefreshModeCanRunStationaryOrRequireHalfABlockOfMovement() {
+        assertTrue(SideScanGeometry.readyForNextPing(false, true, 0));
+        assertTrue(SideScanGeometry.readyForNextPing(true, false, 0));
+        org.junit.jupiter.api.Assertions.assertFalse(
+                SideScanGeometry.readyForNextPing(true, true, 0.499));
+        assertTrue(SideScanGeometry.readyForNextPing(true, true, 0.5));
+    }
+
+    @Test
     void shaftSpeedIsDirectUntilTheRadarBearingLimit() {
         assertEquals(4.8f, SonarRotation.angularSpeed(16, 256), 1.0e-5f);
         assertEquals(19.2f, SonarRotation.angularSpeed(64, 256), 1.0e-5f);

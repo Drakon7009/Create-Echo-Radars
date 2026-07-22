@@ -28,6 +28,8 @@ import org.joml.Matrix4f;
 import org.rassvet.create_echo_radars.CreateEchoRadars;
 import org.rassvet.create_echo_radars.config.SyncedServerConfig;
 import org.rassvet.create_echo_radars.content.sonar.SableSonarCompat;
+import org.rassvet.create_echo_radars.content.sonar.SideScanGeometry;
+import org.rassvet.create_echo_radars.content.sonar.SideScanHitFilter;
 import org.rassvet.create_echo_radars.content.sonar.NearbyBlockTracker;
 import org.rassvet.create_echo_radars.content.sonar.SonarAdaptiveTracePlan;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
@@ -176,47 +178,103 @@ public final class SonarDebugRenderer {
                 SyncedServerConfig.hitRefinementBacktrackBlocks());
 
         List<RayPlan> pending = new ArrayList<>(horizontalBeams * verticalBeams);
-        for (int beam = 0; beam < horizontalBeams; beam++) {
-            for (int vertical = 0; vertical < verticalBeams; vertical++) {
-                pending.add(new RayPlan(new SonarAdaptiveTracePlan.Leaf(beam, vertical, 0, 0),
-                        0, range));
+        if (sonarType == SonarType.SIDE_SCAN_D) {
+            for (SonarAdaptiveTracePlan.Leaf leaf :
+                    SideScanGeometry.createLeaves(horizontalBeams, verticalBeams)) {
+                pending.add(new RayPlan(leaf, 0, range));
+            }
+        } else {
+            for (int beam = 0; beam < horizontalBeams; beam++) {
+                for (int vertical = 0; vertical < verticalBeams; vertical++) {
+                    pending.add(new RayPlan(new SonarAdaptiveTracePlan.Leaf(beam, vertical, 0, 0),
+                            0, range));
+                }
             }
         }
 
+        int primaryPlanCount = pending.size();
         List<Ray> rays = new ArrayList<>(pending.size());
         NearbyBlockTracker detectedHitBlocks = new NearbyBlockTracker();
+        List<SideScanRefinementCandidate> sideScanCandidates = new ArrayList<>();
         for (int i = 0; i < pending.size(); i++) {
             RayPlan plan = pending.get(i);
             double endDistance = plan.endDistance;
             Vec3 direction = direction(orientation, settings, plan.leaf);
-            SableSonarCompat.Snapshot sableSnapshot = SableSonarCompat.capture(level, origin,
-                    orientation, range, sector, List.of(new SableSonarCompat.RaySegment(
-                            origin, direction, plan.startDistance, endDistance)));
-            TraceEnd end = findTraceEnd(level, origin, direction,
+            Vec3 rayOrigin = sonarType == SonarType.SIDE_SCAN_D
+                    ? origin.add(orientation.right().scale(
+                    SideScanGeometry.emitterSideOffset(plan.leaf)))
+                    : origin;
+            SableSonarCompat.Snapshot sableSnapshot = SableSonarCompat.capture(level, rayOrigin,
+                    orientation, range,
+                    sonarType == SonarType.SIDE_SCAN_D ? 180 : sector,
+                    sonarType == SonarType.SIDE_SCAN_D ? 180 : verticalSector,
+                    List.of(new SableSonarCompat.RaySegment(
+                            rayOrigin, direction, plan.startDistance, endDistance)));
+            TraceEnd end = findTraceEnd(level, rayOrigin, direction,
                     plan.startDistance, endDistance, sableSnapshot);
-            Vec3 start = origin.add(direction.scale(plan.startDistance));
+            Vec3 start = rayOrigin.add(direction.scale(plan.startDistance));
             if (rayMode.shows(plan.leaf.refinement())) {
                 rays.add(new Ray(start, end.position, end.hit, plan.leaf.beam(),
                         plan.leaf.vertical(), horizontalBeams,
                         plan.leaf.refinement() ? RayKind.REFINEMENT : RayKind.MAIN));
             }
             boolean nearbyDetected = false;
+            boolean delaySideScanRefinement = false;
             if (end.hit && !plan.leaf.refinement()
                     && SyncedServerConfig.refineOnlyUndetectedNeighbors()) {
-                Vec3 hitBlock = end.position.add(direction.scale(1.0e-4));
-                nearbyDetected = detectedHitBlocks.hasNearbyAndRecord(
-                        (int) Math.floor(hitBlock.x), (int) Math.floor(hitBlock.y),
-                        (int) Math.floor(hitBlock.z));
+                SideScanHitFilter.Cell hit = hitCell(end.position, direction);
+                if (sonarType == SonarType.SIDE_SCAN_D) {
+                    delaySideScanRefinement = true;
+                    sideScanCandidates.add(new SideScanRefinementCandidate(plan, end, hit));
+                } else {
+                    nearbyDetected = detectedHitBlocks.hasNearbyAndRecord(
+                            hit.x(), hit.y(), hit.z());
+                }
             }
-            if (end.hit && !nearbyDetected && rayMode.tracesRefinements()) {
-                for (SonarAdaptiveTracePlan.Leaf leaf :
-                        SonarAdaptiveTracePlan.refinementsForHit(plan.leaf, end.distance, settings)) {
+            if (end.hit && !delaySideScanRefinement && !nearbyDetected
+                    && rayMode.tracesRefinements()) {
+                List<SonarAdaptiveTracePlan.Leaf> refinements = sonarType == SonarType.SIDE_SCAN_D
+                        ? SonarAdaptiveTracePlan.sideScanRefinementsForHit(
+                        plan.leaf, end.distance, settings)
+                        : SonarAdaptiveTracePlan.refinementsForHit(
+                        plan.leaf, end.distance, settings);
+                for (SonarAdaptiveTracePlan.Leaf leaf : refinements) {
                     pending.add(new RayPlan(leaf, leaf.refinementStartDistance(),
                             leaf.refinementEndDistance()));
                 }
             }
+            if (i == primaryPlanCount - 1 && rayMode.tracesRefinements()
+                    && !sideScanCandidates.isEmpty()) {
+                appendAllowedSideScanRefinements(pending, sideScanCandidates, settings);
+            }
         }
         return List.copyOf(rays);
+    }
+
+    private static void appendAllowedSideScanRefinements(
+            List<RayPlan> pending, List<SideScanRefinementCandidate> candidates,
+            SonarAdaptiveTracePlan.Settings settings) {
+        List<SideScanHitFilter.Cell> hits = new ArrayList<>(candidates.size());
+        for (SideScanRefinementCandidate candidate : candidates) hits.add(candidate.cell());
+        boolean[] refinementAllowed = SideScanHitFilter.refinementsAllowed(hits);
+        for (int i = 0; i < candidates.size(); i++) {
+            if (!refinementAllowed[i]) continue;
+            SideScanRefinementCandidate candidate = candidates.get(i);
+            for (SonarAdaptiveTracePlan.Leaf leaf :
+                    SonarAdaptiveTracePlan.sideScanRefinementsForHit(
+                            candidate.plan().leaf, candidate.end().distance, settings)) {
+                pending.add(new RayPlan(leaf, leaf.refinementStartDistance(),
+                        leaf.refinementEndDistance()));
+            }
+        }
+    }
+
+    private static SideScanHitFilter.Cell hitCell(Vec3 hitPosition, Vec3 direction) {
+        Vec3 hitBlock = hitPosition.add(direction.scale(1.0e-4));
+        return new SideScanHitFilter.Cell(
+                (int) Math.floor(hitBlock.x),
+                (int) Math.floor(hitBlock.y),
+                (int) Math.floor(hitBlock.z));
     }
 
     private static List<Ray> traceEntityVisibilityRays(Level level, SonarBlockEntity sonar,
@@ -513,6 +571,9 @@ public final class SonarDebugRenderer {
     private record RayPlan(SonarAdaptiveTracePlan.Leaf leaf, double startDistance, double endDistance) {}
 
     private record TraceEnd(Vec3 position, boolean hit, double distance) {}
+
+    private record SideScanRefinementCandidate(
+            RayPlan plan, TraceEnd end, SideScanHitFilter.Cell cell) {}
 
     private record AnglePreview(BlockPos pos, net.minecraft.resources.ResourceKey<Level> dimension,
                                 int range, int horizontalSector, int verticalSector, int tiltAngle,

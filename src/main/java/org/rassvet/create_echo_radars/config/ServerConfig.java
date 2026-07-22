@@ -2,6 +2,7 @@ package org.rassvet.create_echo_radars.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
+import org.rassvet.create_echo_radars.content.sonar.SideScanGeometry;
 
 import java.util.EnumMap;
 import java.util.Map;
@@ -22,6 +23,8 @@ public final class ServerConfig {
     private static final ModConfigSpec.IntValue HIT_REFINEMENT_BACKTRACK_BLOCKS;
     private static final ModConfigSpec.IntValue BLOCKS_PER_TICK;
     private static final ModConfigSpec.IntValue PING_PAUSE_TICKS;
+    private static final ModConfigSpec.IntValue SIDE_SCAN_PING_PAUSE_TICKS;
+    private static final ModConfigSpec.BooleanValue SIDE_SCAN_MOVEMENT_ONLY;
     private static final ModConfigSpec.IntValue MAX_CHUNK_READS;
     private static final ModConfigSpec.IntValue TRACE_WORKER_THREADS;
     private static final ModConfigSpec.BooleanValue ENTITY_OCCLUSION_CHECK;
@@ -39,10 +42,12 @@ public final class ServerConfig {
             String path = "scanning.beams." + type.registryName();
             HORIZONTAL_BEAMS.put(type, builder.comment(
                             "Horizontal beams emitted by the " + type.registryName() + " sonar.")
-                    .defineInRange(path + ".horizontal", DEFAULT_HORIZONTAL_BEAMS, 11, 121));
+                    .defineInRange(path + ".horizontal", defaultHorizontalBeams(type),
+                            minimumHorizontalBeams(type), maximumHorizontalBeams(type)));
             VERTICAL_BEAMS.put(type, builder.comment(
                             "Vertical sub-beams emitted by the " + type.registryName() + " sonar.")
-                    .defineInRange(path + ".vertical", DEFAULT_VERTICAL_BEAMS, 1, 50));
+                    .defineInRange(path + ".vertical", defaultVerticalBeams(type),
+                            minimumVerticalBeams(type), 50));
         }
         ADDITIONAL_RAYS = builder.comment(
                         "Additional rays emitted around a primary hit. Allowed values: 4, 8, or 16.")
@@ -57,6 +62,12 @@ public final class ServerConfig {
                 .defineInRange("scanning.blocksPerTick", 10, 1, 16);
         PING_PAUSE_TICKS = builder.comment("Server ticks to wait after a completed ping before starting the next one.")
                 .defineInRange("scanning.pingPauseTicks", 20, 0, 200);
+        SIDE_SCAN_PING_PAUSE_TICKS = builder.comment(
+                        "Server ticks to wait after a completed side-scan ping. Lower values update faster.")
+                .defineInRange("scanning.sideScanPingPauseTicks", 20, 0, 200);
+        SIDE_SCAN_MOVEMENT_ONLY = builder.comment(
+                        "Only start a new side-scan sonar ping after it moves at least half a block.")
+                .define("scanning.sideScanMovementOnly", false);
         MAX_CHUNK_READS = builder.comment("Maximum asynchronous unloaded chunk NBT reads per level.")
                 .defineInRange("scanning.maxConcurrentChunkReads", 2, 1, 8);
         TRACE_WORKER_THREADS = builder.comment("Worker threads used for sonar ray tracing.")
@@ -73,14 +84,15 @@ public final class ServerConfig {
     private ServerConfig() {}
 
     public static int horizontalBeams(SonarType type) {
-        if (usesLegacyBeamSettings()) return odd(LEGACY_HORIZONTAL_BEAMS.get());
-        int configured = HORIZONTAL_BEAMS.get(type).get();
-        return odd(configured);
+        int configured = usesLegacyBeamSettings()
+                ? LEGACY_HORIZONTAL_BEAMS.get() : HORIZONTAL_BEAMS.get(type).get();
+        return odd(clamp(configured, minimumHorizontalBeams(type), maximumHorizontalBeams(type)));
     }
 
     public static int verticalBeams(SonarType type) {
-        if (usesLegacyBeamSettings()) return LEGACY_VERTICAL_BEAMS.get();
-        return VERTICAL_BEAMS.get(type).get();
+        int configured = usesLegacyBeamSettings()
+                ? LEGACY_VERTICAL_BEAMS.get() : VERTICAL_BEAMS.get(type).get();
+        return clamp(configured, minimumVerticalBeams(type), 50);
     }
 
     public static BeamSettings beamSettings(SonarType type) {
@@ -107,6 +119,14 @@ public final class ServerConfig {
         return PING_PAUSE_TICKS.get();
     }
 
+    public static int sideScanPingPauseTicks() {
+        return SIDE_SCAN_PING_PAUSE_TICKS.get();
+    }
+
+    public static boolean sideScanMovementOnly() {
+        return SIDE_SCAN_MOVEMENT_ONLY.get();
+    }
+
     public static int maxConcurrentChunkReads() {
         return MAX_CHUNK_READS.get();
     }
@@ -126,7 +146,9 @@ public final class ServerConfig {
     public static void save(int[] horizontalBeams, int[] verticalBeams,
                             int additionalRays, boolean refineOnlyUndetectedNeighbors,
                             int hitRefinementBacktrackBlocks,
-                            int blocksPerTick, int pingPauseTicks, int maxConcurrentChunkReads,
+                            int blocksPerTick, int pingPauseTicks, int sideScanPingPauseTicks,
+                            boolean sideScanMovementOnly,
+                            int maxConcurrentChunkReads,
                             int traceWorkerThreads, boolean entityOcclusionCheck,
                             boolean traceTimeProfiling) {
         SonarType[] types = SonarType.values();
@@ -134,8 +156,10 @@ public final class ServerConfig {
             throw new IllegalArgumentException("Expected beam settings for " + types.length + " sonar types");
         }
         for (int i = 0; i < types.length; i++) {
-            HORIZONTAL_BEAMS.get(types[i]).set(odd(clamp(horizontalBeams[i], 11, 121)));
-            VERTICAL_BEAMS.get(types[i]).set(clamp(verticalBeams[i], 1, 50));
+            HORIZONTAL_BEAMS.get(types[i]).set(odd(clamp(horizontalBeams[i],
+                    minimumHorizontalBeams(types[i]), maximumHorizontalBeams(types[i]))));
+            VERTICAL_BEAMS.get(types[i]).set(clamp(verticalBeams[i],
+                    minimumVerticalBeams(types[i]), 50));
         }
         LEGACY_HORIZONTAL_BEAMS.set(DEFAULT_HORIZONTAL_BEAMS);
         LEGACY_VERTICAL_BEAMS.set(DEFAULT_VERTICAL_BEAMS);
@@ -144,6 +168,8 @@ public final class ServerConfig {
         HIT_REFINEMENT_BACKTRACK_BLOCKS.set(clamp(hitRefinementBacktrackBlocks, 0, 16));
         BLOCKS_PER_TICK.set(clamp(blocksPerTick, 1, 16));
         PING_PAUSE_TICKS.set(clamp(pingPauseTicks, 0, 200));
+        SIDE_SCAN_PING_PAUSE_TICKS.set(clamp(sideScanPingPauseTicks, 0, 200));
+        SIDE_SCAN_MOVEMENT_ONLY.set(sideScanMovementOnly);
         MAX_CHUNK_READS.set(clamp(maxConcurrentChunkReads, 1, 8));
         TRACE_WORKER_THREADS.set(clamp(traceWorkerThreads, 1, 8));
         ENTITY_OCCLUSION_CHECK.set(entityOcclusionCheck);
@@ -153,6 +179,27 @@ public final class ServerConfig {
 
     public static int defaultTraceWorkerThreads() {
         return Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+    }
+
+    public static int defaultHorizontalBeams(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? SideScanGeometry.MAX_HORIZONTAL_BEAMS
+                : DEFAULT_HORIZONTAL_BEAMS;
+    }
+
+    public static int minimumHorizontalBeams(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? 1 : 11;
+    }
+
+    public static int maximumHorizontalBeams(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? SideScanGeometry.MAX_HORIZONTAL_BEAMS : 121;
+    }
+
+    public static int defaultVerticalBeams(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? 9 : DEFAULT_VERTICAL_BEAMS;
+    }
+
+    public static int minimumVerticalBeams(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? 9 : 1;
     }
 
     private static boolean validAdditionalRays(Object value) {
@@ -171,8 +218,8 @@ public final class ServerConfig {
             return false;
         }
         for (SonarType type : SonarType.values()) {
-            if (HORIZONTAL_BEAMS.get(type).get() != DEFAULT_HORIZONTAL_BEAMS
-                    || VERTICAL_BEAMS.get(type).get() != DEFAULT_VERTICAL_BEAMS) {
+            if (HORIZONTAL_BEAMS.get(type).get() != defaultHorizontalBeams(type)
+                    || VERTICAL_BEAMS.get(type).get() != defaultVerticalBeams(type)) {
                 return false;
             }
         }

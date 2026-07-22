@@ -43,6 +43,7 @@ public final class SonarMonitorRenderer {
     private static final float SWEEP_DEPTH = 0.949f;
     private static final float ECHO_DEPTH = 0.952f;
     private static final float TRACK_DEPTH = 0.957f;
+    private static final float LABEL_DEPTH = 0.975f;
     private static final int ARC_STEPS = 48;
     private static final float REVEAL_COMPLETE_EPSILON = 1.0e-4f;
     private static final float REVEAL_EDGE_MIN_WIDTH = 0.035f;
@@ -87,7 +88,7 @@ public final class SonarMonitorRenderer {
 
         if (snapshot.sonarType() != org.rassvet.create_echo_radars.content.sonar.SonarType.FORWARD_LOOKING_F) {
             renderSpecialized(monitor, snapshot, poseStack, buffers, palette, area, displayRange,
-                    partialTick);
+                    partialTick, overrideHover);
             return;
         }
 
@@ -261,11 +262,23 @@ public final class SonarMonitorRenderer {
     private static void renderSpecialized(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
                                           PoseStack poseStack, MultiBufferSource buffers,
                                           SonarPalette palette, SonarDisplayLayout.Area area,
-                                          int displayRange, float partialTick) {
+                                          int displayRange, float partialTick,
+                                          boolean forceLabels) {
+        boolean sideScan = snapshot.sonarType()
+                == org.rassvet.create_echo_radars.content.sonar.SonarType.SIDE_SCAN_D;
+        SideScanDataLayout sideScanLayout = sideScan
+                ? sideScanDataLayout(area, ClientConfig.sideScanDataPosition()) : null;
+        SonarDisplayLayout.Area plotArea = sideScan ? sideScanLayout.plotArea() : area;
         VertexConsumer backgroundQuads = buffers.getBuffer(RenderType.debugQuads());
         colorQuad(backgroundQuads, poseStack.last(), area.left(), area.right(), area.bottom(), area.top(),
-                BACKGROUND_DEPTH, 0.002f, 0.003f, 0.008f, 0.96f);
-        renderSpecializedGrid(snapshot, poseStack, buffers, area);
+                BACKGROUND_DEPTH, sideScan ? 0.016f : 0.002f,
+                sideScan ? 0.022f : 0.003f, sideScan ? 0.028f : 0.008f, 0.98f);
+        if (sideScan) {
+            colorQuad(backgroundQuads, poseStack.last(), plotArea.left(), plotArea.right(),
+                    plotArea.bottom(), plotArea.top(), SECTOR_DEPTH,
+                    0.002f, 0.003f, 0.008f, 0.98f);
+        }
+        renderSpecializedGrid(snapshot, poseStack, buffers, plotArea);
         // Switching to the line render type above completes the previous debugQuads builder.
         // Request a fresh consumer before appending echo pixels; retaining backgroundQuads here
         // crashes with BufferBuilder "Not building" on BufferSource implementations used by Sable.
@@ -274,6 +287,18 @@ public final class SonarMonitorRenderer {
         double currentTick = monitor.getLevel().getGameTime() + partialTick;
         ClientFrameHistory clientHistory = clientHistory(monitor, snapshot);
         List<SonarFrame> frames = clientHistory.frames();
+        List<VisibleOrdinaryFrame> sideScanVisibleFrames = sideScan
+                ? visibleSideScanFrames(frames, SonarDisplayLayout.sideScanRowCapacity(
+                plotArea, sideScanHistoryAlongX(sideScanLayout.position()))) : List.of();
+        if (sideScan && snapshot.autoHeight()) {
+            List<SonarFrame> visibleFramesForRange = new java.util.ArrayList<>(
+                    sideScanVisibleFrames.size());
+            for (VisibleOrdinaryFrame visibleFrame : sideScanVisibleFrames) {
+                visibleFramesForRange.add(visibleFrame.frame());
+            }
+            displayRange = SonarDisplayLayout.compositeDisplayRangeFromFrames(
+                    visibleFramesForRange, snapshot.range(), displayRange);
+        }
         if (snapshot.sonarType()
                 == org.rassvet.create_echo_radars.content.sonar.SonarType.MECHANICAL_IMAGING_C) {
             clientHistory.advanceMechanicalDisplay(sweepAngle, snapshot.scanAngularSpeed(), currentTick);
@@ -331,13 +356,17 @@ public final class SonarMonitorRenderer {
             renderCircularLabels(snapshot, poseStack, buffers, area, displayRange, circle);
             return;
         } else {
-            List<VisibleOrdinaryFrame> visibleFrames = visibleOrdinaryFrames(frames, currentTick);
+            List<VisibleOrdinaryFrame> visibleFrames = sideScan
+                    ? sideScanVisibleFrames
+                    : visibleOrdinaryFrames(frames, currentTick);
             int frameCount = Math.max(1, visibleFrames.size());
             for (int frameIndex = 0; frameIndex < visibleFrames.size(); frameIndex++) {
                 VisibleOrdinaryFrame visibleFrame = visibleFrames.get(frameIndex);
                 SonarFrame frame = visibleFrame.frame();
                 float ageAlpha = visibleFrame.alpha();
-                for (SonarReturn sonarReturn : frame.returns()) {
+                Iterable<SonarReturn> frameReturns = sideScan
+                        ? strongestSideScanReturns(frame.returns()) : frame.returns();
+                for (SonarReturn sonarReturn : frameReturns) {
                     float strength = (float) Math.pow(Math.max(0, Math.min(1,
                             sonarReturn.intensity() * ClientConfig.gain())), 0.55);
                     SonarPalette.Rgb color = palette.color(strength);
@@ -349,9 +378,18 @@ public final class SonarMonitorRenderer {
                             z = area.top() - sonarReturn.normalizedDistance() * area.height() * 0.94f;
                         }
                         case SIDE_SCAN_D -> {
-                            float side = sonarReturn.bearingDegrees() < 0 ? -1 : 1;
-                            x = area.centerX() + side * sonarReturn.normalizedDistance() * area.width() * 0.47f;
-                            z = area.bottom() + (frameIndex + 0.5f) * area.height() / frameCount;
+                            if (sonarReturn.rangeBin() >= displayRange) continue;
+                            int ageRows = visibleFrames.size() - 1 - frameIndex;
+                            SonarDisplayLayout.SideScanCell cell = SonarDisplayLayout.sideScanCell(
+                                    plotArea, sonarReturn.rangeBin(), displayRange,
+                                    sonarReturn.bearingDegrees() >= 0, ageRows,
+                                    ClientConfig.pointGaps(),
+                                    sideScanHistoryAlongX(sideScanLayout.position()),
+                                    sideScanNewestAtMinimum(sideScanLayout.position()));
+                            colorQuad(echoQuads, poseStack.last(), cell.left(), cell.right(),
+                                    cell.bottom(), cell.top(), ECHO_DEPTH,
+                                    color.red(), color.green(), color.blue(), ageAlpha);
+                            continue;
                         }
                         default -> {
                             continue;
@@ -363,11 +401,124 @@ public final class SonarMonitorRenderer {
                 }
             }
         }
-        renderSpecializedTracks(monitor, snapshot, poseStack, buffers, area, displayRange);
-        if (area.minSize() >= 2) {
-            drawLabel(displayRange + "m", area.right() - area.minSize() * 0.06f,
-                    area.bottom() + area.minSize() * 0.03f, poseStack, buffers, area.minSize());
+        renderSpecializedTracks(monitor, snapshot, poseStack, buffers, plotArea, displayRange);
+        if (area.minSize() >= 2 || forceLabels) {
+            if (sideScan) {
+                renderSideScanData(poseStack, buffers, sideScanLayout, displayRange,
+                        sideScanVisibleFrames, currentTick);
+            } else {
+                drawLabel(displayRange + "m", area.right() - area.minSize() * 0.06f,
+                        area.bottom() + area.minSize() * 0.03f,
+                        poseStack, buffers, area.minSize());
+            }
         }
+    }
+
+    private static void renderSideScanData(PoseStack poseStack, MultiBufferSource buffers,
+                                           SideScanDataLayout layout, int displayRange,
+                                           List<VisibleOrdinaryFrame> frames,
+                                           double currentTick) {
+        SonarDisplayLayout.Area plot = layout.plotArea();
+        float size = Math.max(1, plot.minSize());
+        SideScanDataPosition position = layout.position();
+
+        if (position == SideScanDataPosition.BOTTOM || position == SideScanDataPosition.TOP) {
+            float bottomZ = (plot.bottom() + layout.outerArea().bottom()) * 0.5f;
+            float topZ = (plot.top() + layout.outerArea().top()) * 0.5f;
+            for (int division = -3; division <= 3; division++) {
+                float x = plot.centerX() + plot.width() * 0.47f * division / 3f;
+                int distance = Math.round(displayRange * Math.abs(division) / 3f);
+                drawLabel(distance + "m", x, bottomZ, poseStack, buffers, size);
+                drawLabel(distance + "m", x, topZ, poseStack, buffers, size);
+            }
+        } else {
+            float leftX = (layout.outerArea().left() + plot.left()) * 0.5f;
+            float rightX = (plot.right() + layout.outerArea().right()) * 0.5f;
+            for (int division = -3; division <= 3; division++) {
+                float z = plot.centerZ() + plot.height() * 0.47f * division / 3f;
+                int distance = Math.round(displayRange * Math.abs(division) / 3f);
+                drawLabel(distance + "m", leftX, z, poseStack, buffers, size);
+                drawLabel(distance + "m", rightX, z, poseStack, buffers, size);
+            }
+        }
+
+        for (int division = 0; division < 6; division++) {
+            int age = sideScanAgeSeconds(frames, currentTick, division, 5);
+            String label = age == 0 ? "0s" : "-" + age + "s";
+            if (position == SideScanDataPosition.BOTTOM || position == SideScanDataPosition.TOP) {
+                float leftX = (layout.outerArea().left() + plot.left()) * 0.5f;
+                float rightX = (plot.right() + layout.outerArea().right()) * 0.5f;
+                float progress = division / 5f;
+                float z = position == SideScanDataPosition.BOTTOM
+                        ? plot.bottom() + plot.height() * progress
+                        : plot.top() - plot.height() * progress;
+                drawLabel(label, leftX, z, poseStack, buffers, size);
+                drawLabel(label, rightX, z, poseStack, buffers, size);
+            } else {
+                float bottomZ = (plot.bottom() + layout.outerArea().bottom()) * 0.5f;
+                float topZ = (plot.top() + layout.outerArea().top()) * 0.5f;
+                float progress = division / 5f;
+                float x = position == SideScanDataPosition.RIGHT
+                        ? plot.right() - plot.width() * progress
+                        : plot.left() + plot.width() * progress;
+                drawLabel(label, x, bottomZ, poseStack, buffers, size);
+                drawLabel(label, x, topZ, poseStack, buffers, size);
+            }
+        }
+    }
+
+    private static int sideScanAgeSeconds(List<VisibleOrdinaryFrame> frames,
+                                          double currentTick, int division, int divisions) {
+        if (division <= 0 || frames.isEmpty()) return 0;
+        int index = Math.round((frames.size() - 1) * (1 - division / (float) divisions));
+        SonarFrame frame = frames.get(Math.max(0, Math.min(frames.size() - 1, index))).frame();
+        long referenceTick = frame.completedTick() > 0
+                ? frame.completedTick() : frame.startedTick();
+        return Math.max(0, (int) Math.ceil((currentTick - referenceTick) / 20.0));
+    }
+
+    private static SideScanDataLayout sideScanDataLayout(
+            SonarDisplayLayout.Area area, SideScanDataPosition position) {
+        float inset = area.minSize() * 0.115f;
+        SonarDisplayLayout.Area plot = new SonarDisplayLayout.Area(
+                area.left() + inset, area.right() - inset,
+                area.bottom() + inset, area.top() - inset);
+        return new SideScanDataLayout(area, plot, position);
+    }
+
+    private static boolean sideScanHistoryAlongX(SideScanDataPosition position) {
+        return position == SideScanDataPosition.RIGHT || position == SideScanDataPosition.LEFT;
+    }
+
+    private static boolean sideScanNewestAtMinimum(SideScanDataPosition position) {
+        return position == SideScanDataPosition.BOTTOM || position == SideScanDataPosition.LEFT;
+    }
+
+    private static List<VisibleOrdinaryFrame> visibleSideScanFrames(List<SonarFrame> frames,
+                                                                    int rowCapacity) {
+        List<SonarFrame> ready = new java.util.ArrayList<>(frames.size());
+        for (SonarFrame frame : frames) {
+            if (SonarDisplayLayout.sideScanFrameOccupiesRow(frame)) ready.add(frame);
+        }
+        int first = Math.max(0, ready.size() - Math.max(1, rowCapacity));
+        List<VisibleOrdinaryFrame> visible = new java.util.ArrayList<>(ready.size() - first);
+        for (int index = first; index < ready.size(); index++) {
+            visible.add(new VisibleOrdinaryFrame(ready.get(index), 1));
+        }
+        return List.copyOf(visible);
+    }
+
+    private static List<SonarReturn> strongestSideScanReturns(List<SonarReturn> returns) {
+        Map<Integer, SonarReturn> strongest = new LinkedHashMap<>();
+        for (SonarReturn sonarReturn : returns) {
+            int side = sonarReturn.bearingDegrees() < 0 ? 0 : 1;
+            int key = sonarReturn.rangeBin() * 2 + side;
+            SonarReturn previous = strongest.get(key);
+            if (previous == null || sonarReturn.intensity() > previous.intensity()) {
+                strongest.put(key, sonarReturn);
+            }
+        }
+        return List.copyOf(strongest.values());
     }
 
     private static List<VisibleOrdinaryFrame> visibleOrdinaryFrames(List<SonarFrame> frames,
@@ -397,6 +548,10 @@ public final class SonarMonitorRenderer {
 
     private record VisibleOrdinaryFrame(SonarFrame frame, float alpha) {}
 
+    private record SideScanDataLayout(SonarDisplayLayout.Area outerArea,
+                                      SonarDisplayLayout.Area plotArea,
+                                      SideScanDataPosition position) {}
+
     private static void renderSpecializedTracks(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
                                                 PoseStack poseStack, MultiBufferSource buffers,
                                                 SonarDisplayLayout.Area area, int displayRange) {
@@ -424,9 +579,22 @@ public final class SonarMonitorRenderer {
                     z = area.top() - (float) normalized * area.height() * 0.94f;
                 }
                 case SIDE_SCAN_D -> {
-                    x = area.centerX() + (float) Math.copySign(normalized * area.width() * 0.47f,
-                            projection.bearingDegrees());
-                    z = area.top() - area.height() * 0.05f;
+                    SideScanDataPosition position = ClientConfig.sideScanDataPosition();
+                    if (sideScanHistoryAlongX(position)) {
+                        x = position == SideScanDataPosition.RIGHT
+                                ? area.right() - area.width() * 0.05f
+                                : area.left() + area.width() * 0.05f;
+                        z = area.centerZ() + (float) Math.copySign(
+                                normalized * area.height() * 0.47f,
+                                projection.bearingDegrees());
+                    } else {
+                        x = area.centerX() + (float) Math.copySign(
+                                normalized * area.width() * 0.47f,
+                                projection.bearingDegrees());
+                        z = position == SideScanDataPosition.BOTTOM
+                                ? area.bottom() + area.height() * 0.05f
+                                : area.top() - area.height() * 0.05f;
+                    }
                 }
                 default -> {
                     continue;
@@ -482,16 +650,54 @@ public final class SonarMonitorRenderer {
                     0.55f, 0.65f, 0.68f, 0.45f);
             return;
         }
+        if (snapshot.sonarType()
+                == org.rassvet.create_echo_radars.content.sonar.SonarType.SIDE_SCAN_D) {
+            boolean historyAlongX = sideScanHistoryAlongX(ClientConfig.sideScanDataPosition());
+            for (int division = 1; division < 5; division++) {
+                if (historyAlongX) {
+                    float x = area.left() + area.width() * division / 5f;
+                    line(lines, matrix, normal, new Vec3(x, 0, area.bottom()),
+                            new Vec3(x, 0, area.top()), GRID_DEPTH,
+                            0.55f, 0.65f, 0.68f, 0.32f);
+                } else {
+                    float z = area.bottom() + area.height() * division / 5f;
+                    line(lines, matrix, normal, new Vec3(area.left(), 0, z),
+                            new Vec3(area.right(), 0, z), GRID_DEPTH,
+                            0.55f, 0.65f, 0.68f, 0.32f);
+                }
+            }
+            if (historyAlongX) {
+                line(lines, matrix, normal, new Vec3(area.left(), 0, area.centerZ()),
+                        new Vec3(area.right(), 0, area.centerZ()), GRID_DEPTH,
+                        0.75f, 0.8f, 0.82f, 0.72f);
+            } else {
+                line(lines, matrix, normal, new Vec3(area.centerX(), 0, area.bottom()),
+                        new Vec3(area.centerX(), 0, area.top()), GRID_DEPTH,
+                        0.75f, 0.8f, 0.82f, 0.72f);
+            }
+            for (int division = 1; division <= 3; division++) {
+                float offset = (historyAlongX ? area.height() : area.width())
+                        * 0.47f * division / 3f;
+                for (int side : new int[]{-1, 1}) {
+                    if (historyAlongX) {
+                        float z = area.centerZ() + side * offset;
+                        line(lines, matrix, normal, new Vec3(area.left(), 0, z),
+                                new Vec3(area.right(), 0, z), GRID_DEPTH,
+                                0.55f, 0.65f, 0.68f, division == 3 ? 0.5f : 0.3f);
+                    } else {
+                        float x = area.centerX() + side * offset;
+                        line(lines, matrix, normal, new Vec3(x, 0, area.bottom()),
+                                new Vec3(x, 0, area.top()), GRID_DEPTH,
+                                0.55f, 0.65f, 0.68f, division == 3 ? 0.5f : 0.3f);
+                    }
+                }
+            }
+            return;
+        }
         for (int division = 1; division < 4; division++) {
             float z = area.bottom() + area.height() * division / 4f;
             line(lines, matrix, normal, new Vec3(area.left(), 0, z), new Vec3(area.right(), 0, z),
                     GRID_DEPTH, 0.55f, 0.65f, 0.68f, 0.38f);
-        }
-        if (snapshot.sonarType()
-                == org.rassvet.create_echo_radars.content.sonar.SonarType.SIDE_SCAN_D) {
-            line(lines, matrix, normal, new Vec3(area.centerX(), 0, area.bottom()),
-                    new Vec3(area.centerX(), 0, area.top()), GRID_DEPTH,
-                    0.75f, 0.8f, 0.82f, 0.72f);
         }
     }
 
@@ -801,8 +1007,9 @@ public final class SonarMonitorRenderer {
                     snapshot.verticalSector(), snapshot.sonarType(), snapshot.horizontalBeams(),
                     rotating ? Float.compare(snapshot.scanAngularSpeed(), 0) : 0,
                     snapshot.autoHeight(), waterfall || rotating ? Vec3.ZERO : snapshot.origin(),
-                    rotating ? Vec3.ZERO : snapshot.forward(),
-                    rotating ? Vec3.ZERO : snapshot.right(), rotating ? Vec3.ZERO : snapshot.up());
+                    waterfall || rotating ? Vec3.ZERO : snapshot.forward(),
+                    waterfall || rotating ? Vec3.ZERO : snapshot.right(),
+                    waterfall || rotating ? Vec3.ZERO : snapshot.up());
         }
     }
 
@@ -870,7 +1077,7 @@ public final class SonarMonitorRenderer {
                                   MultiBufferSource buffers, float size) {
         Font font = Minecraft.getInstance().font;
         poseStack.pushPose();
-        poseStack.translate(x, TRACK_DEPTH + 0.0005f, z);
+        poseStack.translate(x, LABEL_DEPTH, z);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
         float scale = 0.0022f * Math.min(1.35f, size / 2f);
         poseStack.scale(scale, scale, scale);
