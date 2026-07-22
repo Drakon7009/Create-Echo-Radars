@@ -264,7 +264,7 @@ public class SonarBlockEntity extends KineticBlockEntity
             return level.getFluidState(BlockPos.containing(emitterPosition())).is(FluidTags.WATER);
         }
         Vec3 center = emitterPosition();
-        Vec3 right = unTiltedOrientation().right().scale(0.501);
+        Vec3 right = unTiltedOrientation().right().scale(SideScanGeometry.EMITTER_SIDE_OFFSET);
         return level.getFluidState(BlockPos.containing(center.add(right))).is(FluidTags.WATER)
                 || level.getFluidState(BlockPos.containing(center.subtract(right))).is(FluidTags.WATER);
     }

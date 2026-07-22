@@ -22,7 +22,7 @@ public final class ModNetworking {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("14").playToServer(UpdateSonarSettingsPayload.TYPE,
+        event.registrar("16").playToServer(UpdateSonarSettingsPayload.TYPE,
                         UpdateSonarSettingsPayload.STREAM_CODEC, UpdateSonarSettingsPayload::handle)
                 .playToServer(UpdateServerConfigPayload.TYPE,
                         UpdateServerConfigPayload.STREAM_CODEC, UpdateServerConfigPayload::handle)
@@ -39,12 +39,15 @@ public final class ModNetworking {
     public static void sendServerConfig(int[] horizontalBeams, int[] verticalBeams,
                                         int additionalRays, boolean refineOnlyUndetectedNeighbors,
                                         int hitRefinementBacktrackBlocks,
-                                        int blocksPerTick, int pingPauseTicks, int maxConcurrentChunkReads,
+                                        int blocksPerTick, int pingPauseTicks,
+                                        int sideScanPingPauseTicks,
+                                        boolean sideScanMovementOnly, int maxConcurrentChunkReads,
                                         int traceWorkerThreads, boolean entityOcclusionCheck,
                                         boolean traceTimeProfiling) {
         PacketDistributor.sendToServer(new UpdateServerConfigPayload(horizontalBeams, verticalBeams,
                 additionalRays, refineOnlyUndetectedNeighbors, hitRefinementBacktrackBlocks,
-                blocksPerTick, pingPauseTicks, maxConcurrentChunkReads, traceWorkerThreads,
+                blocksPerTick, pingPauseTicks, sideScanPingPauseTicks, sideScanMovementOnly,
+                maxConcurrentChunkReads, traceWorkerThreads,
                 entityOcclusionCheck, traceTimeProfiling));
     }
 
@@ -97,6 +100,8 @@ public final class ModNetworking {
                                             int additionalRays, boolean refineOnlyUndetectedNeighbors,
                                             int hitRefinementBacktrackBlocks,
                                             int blocksPerTick, int pingPauseTicks,
+                                            int sideScanPingPauseTicks,
+                                            boolean sideScanMovementOnly,
                                             int maxConcurrentChunkReads, int traceWorkerThreads,
                                             boolean entityOcclusionCheck, boolean traceTimeProfiling)
             implements CustomPacketPayload {
@@ -113,6 +118,8 @@ public final class ModNetworking {
             buffer.writeVarInt(hitRefinementBacktrackBlocks);
             buffer.writeVarInt(blocksPerTick);
             buffer.writeVarInt(pingPauseTicks);
+            buffer.writeVarInt(sideScanPingPauseTicks);
+            buffer.writeBoolean(sideScanMovementOnly);
             buffer.writeVarInt(maxConcurrentChunkReads);
             buffer.writeVarInt(traceWorkerThreads);
             buffer.writeBoolean(entityOcclusionCheck);
@@ -122,7 +129,8 @@ public final class ModNetworking {
         private static UpdateServerConfigPayload decode(RegistryFriendlyByteBuf buffer) {
             return new UpdateServerConfigPayload(readBeamValues(buffer), readBeamValues(buffer),
                     buffer.readVarInt(), buffer.readBoolean(), buffer.readVarInt(),
-                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readBoolean(),
+                    buffer.readVarInt(), buffer.readVarInt(),
                     buffer.readBoolean(), buffer.readBoolean());
         }
 
@@ -137,14 +145,17 @@ public final class ModNetworking {
                         payload.additionalRays, payload.refineOnlyUndetectedNeighbors,
                         payload.hitRefinementBacktrackBlocks,
                         payload.blocksPerTick, payload.pingPauseTicks,
+                        payload.sideScanPingPauseTicks, payload.sideScanMovementOnly,
                         payload.maxConcurrentChunkReads, payload.traceWorkerThreads,
                         payload.entityOcclusionCheck, payload.traceTimeProfiling);
                 syncServerConfigToAllPlayers();
                 CreateEchoRadars.LOGGER.info(
-                        "Player {} updated sonar server config: beams={}, additionalRays={}, refineOnlyUndetectedNeighbors={}, hitRefinementBacktrackBlocks={}, blocksPerTick={}, pingPauseTicks={}, maxConcurrentChunkReads={}, traceWorkerThreads={}, entityOcclusionCheck={}, traceTimeProfiling={}",
+                        "Player {} updated sonar server config: beams={}, additionalRays={}, refineOnlyUndetectedNeighbors={}, hitRefinementBacktrackBlocks={}, blocksPerTick={}, pingPauseTicks={}, sideScanPingPauseTicks={}, sideScanMovementOnly={}, maxConcurrentChunkReads={}, traceWorkerThreads={}, entityOcclusionCheck={}, traceTimeProfiling={}",
                         context.player().getScoreboardName(), beamSettingsLog(), ServerConfig.additionalRays(),
                         ServerConfig.refineOnlyUndetectedNeighbors(), ServerConfig.hitRefinementBacktrackBlocks(),
                         ServerConfig.blocksPerTick(), ServerConfig.pingPauseTicks(),
+                        ServerConfig.sideScanPingPauseTicks(),
+                        ServerConfig.sideScanMovementOnly(),
                         ServerConfig.maxConcurrentChunkReads(), ServerConfig.traceWorkerThreads(),
                         ServerConfig.entityOcclusionCheck(), ServerConfig.traceTimeProfiling());
             });
@@ -185,6 +196,8 @@ public final class ModNetworking {
                                               int additionalRays, boolean refineOnlyUndetectedNeighbors,
                                               int hitRefinementBacktrackBlocks,
                                               int blocksPerTick, int pingPauseTicks,
+                                              int sideScanPingPauseTicks,
+                                              boolean sideScanMovementOnly,
                                               int maxConcurrentChunkReads, int traceWorkerThreads,
                                               boolean entityOcclusionCheck, boolean traceTimeProfiling)
             implements CustomPacketPayload {
@@ -201,6 +214,8 @@ public final class ModNetworking {
             buffer.writeVarInt(hitRefinementBacktrackBlocks);
             buffer.writeVarInt(blocksPerTick);
             buffer.writeVarInt(pingPauseTicks);
+            buffer.writeVarInt(sideScanPingPauseTicks);
+            buffer.writeBoolean(sideScanMovementOnly);
             buffer.writeVarInt(maxConcurrentChunkReads);
             buffer.writeVarInt(traceWorkerThreads);
             buffer.writeBoolean(entityOcclusionCheck);
@@ -211,7 +226,8 @@ public final class ModNetworking {
             return new ServerConfigSnapshotPayload(UpdateServerConfigPayload.readBeamValues(buffer),
                     UpdateServerConfigPayload.readBeamValues(buffer), buffer.readVarInt(), buffer.readBoolean(),
                     buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(),
-                    buffer.readVarInt(), buffer.readBoolean(), buffer.readBoolean());
+                    buffer.readBoolean(),
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readBoolean(), buffer.readBoolean());
         }
 
         private static ServerConfigSnapshotPayload fromServerConfig() {
@@ -219,6 +235,8 @@ public final class ModNetworking {
             return new ServerConfigSnapshotPayload(snapshot.horizontalBeams(), snapshot.verticalBeams(),
                     snapshot.additionalRays(), snapshot.refineOnlyUndetectedNeighbors(),
                     snapshot.hitRefinementBacktrackBlocks(), snapshot.blocksPerTick(), snapshot.pingPauseTicks(),
+                    snapshot.sideScanPingPauseTicks(),
+                    snapshot.sideScanMovementOnly(),
                     snapshot.maxConcurrentChunkReads(), snapshot.traceWorkerThreads(),
                     snapshot.entityOcclusionCheck(), snapshot.traceTimeProfiling());
         }
@@ -226,7 +244,9 @@ public final class ModNetworking {
         private static void handle(ServerConfigSnapshotPayload payload, IPayloadContext context) {
             SyncedServerConfig.apply(payload.horizontalBeams, payload.verticalBeams, payload.additionalRays,
                     payload.refineOnlyUndetectedNeighbors, payload.hitRefinementBacktrackBlocks,
-                    payload.blocksPerTick, payload.pingPauseTicks, payload.maxConcurrentChunkReads,
+                    payload.blocksPerTick, payload.pingPauseTicks,
+                    payload.sideScanPingPauseTicks, payload.sideScanMovementOnly,
+                    payload.maxConcurrentChunkReads,
                     payload.traceWorkerThreads, payload.entityOcclusionCheck, payload.traceTimeProfiling);
         }
 

@@ -167,6 +167,9 @@ public final class SonarMonitorScreen extends Screen {
                              double mouseX, double mouseY) {
         if (!insideDisplay(mouseX, mouseY)) return null;
         SonarDisplayLayout.Area area = displayArea(monitor);
+        SonarDisplayLayout.Area plotArea = snapshot.sonarType()
+                == org.rassvet.create_echo_radars.content.sonar.SonarType.SIDE_SCAN_D
+                ? sideScanPlotArea(area) : area;
         int displayRange = snapshot.effectiveDisplayRange();
         SonarOrientation orientation = snapshot.displayOrientation();
         Vec3 trackOrigin = snapshot.displayOrigin();
@@ -194,12 +197,21 @@ public final class SonarMonitorScreen extends Screen {
                 }
                 case ECHO_SOUNDER_A -> point = new SonarDisplayProjection.Point(0.9,
                         1 - normalizedRange * 1.88);
-                case SIDE_SCAN_D -> point = new SonarDisplayProjection.Point(
-                        Math.copySign(normalizedRange * 0.94, projection.bearingDegrees()), 0.9);
+                case SIDE_SCAN_D -> {
+                    SideScanDataPosition position = ClientConfig.sideScanDataPosition();
+                    double signedDistance = Math.copySign(normalizedRange * 0.94,
+                            projection.bearingDegrees());
+                    point = switch (position) {
+                        case BOTTOM -> new SonarDisplayProjection.Point(signedDistance, -0.9);
+                        case TOP -> new SonarDisplayProjection.Point(signedDistance, 0.9);
+                        case RIGHT -> new SonarDisplayProjection.Point(0.9, signedDistance);
+                        case LEFT -> new SonarDisplayProjection.Point(-0.9, signedDistance);
+                    };
+                }
                 default -> throw new IllegalStateException();
             }
-            double sourceX = area.centerX() + point.x() * area.width() * 0.5;
-            double sourceZ = area.centerZ() + point.z() * area.height() * 0.5;
+            double sourceX = plotArea.centerX() + point.x() * plotArea.width() * 0.5;
+            double sourceZ = plotArea.centerZ() + point.z() * plotArea.height() * 0.5;
             double screenX = displayLeft + (sourceX - area.left()) * displayScale;
             double screenY = displayTop + (sourceZ - area.bottom()) * displayScale;
             double distance = Math.pow(screenX - mouseX, 2) + Math.pow(screenY - mouseY, 2);
@@ -215,5 +227,11 @@ public final class SonarMonitorScreen extends Screen {
         SonarMonitorDimensions dimensions = ((SonarMonitorExtension) monitor)
                 .createEchoRadars$getMonitorDimensions();
         return SonarDisplayLayout.area(dimensions);
+    }
+
+    private static SonarDisplayLayout.Area sideScanPlotArea(SonarDisplayLayout.Area area) {
+        float inset = area.minSize() * 0.115f;
+        return new SonarDisplayLayout.Area(area.left() + inset, area.right() - inset,
+                area.bottom() + inset, area.top() - inset);
     }
 }
