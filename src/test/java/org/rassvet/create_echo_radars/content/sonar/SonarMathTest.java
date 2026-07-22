@@ -93,6 +93,70 @@ class SonarMathTest {
     }
 
     @Test
+    void sideScanWaterfallUsesAdjacentRowsFromNewestToOldest() {
+        SonarDisplayLayout.Area area =
+                SonarDisplayLayout.area(new SonarMonitorDimensions(4, 4));
+        assertEquals(96, SonarDisplayLayout.sideScanRowCapacity(area));
+
+        SonarDisplayLayout.SideScanCell newest =
+                SonarDisplayLayout.sideScanCell(area, 10, 128, true, 0, false);
+        SonarDisplayLayout.SideScanCell previous =
+                SonarDisplayLayout.sideScanCell(area, 10, 128, true, 1, false);
+        assertEquals(area.top(), newest.top(), 1.0e-6);
+        assertEquals(newest.bottom(), previous.top(), 1.0e-6);
+        assertTrue(previous.bottom() < newest.bottom());
+    }
+
+    @Test
+    void sideScanRangeCellsFillBothSidesWithoutCrossingTheCenter() {
+        SonarDisplayLayout.Area area =
+                SonarDisplayLayout.area(new SonarMonitorDimensions(4, 4));
+        SonarDisplayLayout.SideScanCell left =
+                SonarDisplayLayout.sideScanCell(area, 0, 128, false, 0, false);
+        SonarDisplayLayout.SideScanCell right =
+                SonarDisplayLayout.sideScanCell(area, 0, 128, true, 0, false);
+        SonarDisplayLayout.SideScanCell nextRight =
+                SonarDisplayLayout.sideScanCell(area, 1, 128, true, 0, false);
+
+        assertEquals(area.centerX(), left.right(), 1.0e-6);
+        assertEquals(area.centerX(), right.left(), 1.0e-6);
+        assertEquals(right.right(), nextRight.left(), 1.0e-6);
+    }
+
+    @Test
+    void sideScanWaterfallCanEnterFromEveryScreenEdge() {
+        SonarDisplayLayout.Area area =
+                SonarDisplayLayout.area(new SonarMonitorDimensions(4, 4));
+        SonarDisplayLayout.SideScanCell bottom = SonarDisplayLayout.sideScanCell(
+                area, 0, 128, true, 0, false, false, true);
+        SonarDisplayLayout.SideScanCell top = SonarDisplayLayout.sideScanCell(
+                area, 0, 128, true, 0, false, false, false);
+        SonarDisplayLayout.SideScanCell left = SonarDisplayLayout.sideScanCell(
+                area, 0, 128, true, 0, false, true, true);
+        SonarDisplayLayout.SideScanCell right = SonarDisplayLayout.sideScanCell(
+                area, 0, 128, true, 0, false, true, false);
+
+        assertEquals(area.bottom(), bottom.bottom(), 1.0e-6);
+        assertEquals(area.top(), top.top(), 1.0e-6);
+        assertEquals(area.left(), left.left(), 1.0e-6);
+        assertEquals(area.right(), right.right(), 1.0e-6);
+    }
+
+    @Test
+    void sideScanHistoryWaitsForDataBeforeAnActiveFrameOccupiesARow() {
+        SonarFrame emptyActive = new SonarFrame(1, 100, 0,
+                false, 0.2f, List.of());
+        SonarFrame activeWithData = new SonarFrame(1, 100, 0,
+                false, 0.2f, List.of(new SonarReturn(0, 4, 0, 0.04f, 1)));
+        SonarFrame completedEmpty = new SonarFrame(1, 100, 110,
+                true, List.of());
+
+        assertFalse(SonarDisplayLayout.sideScanFrameOccupiesRow(emptyActive));
+        assertTrue(SonarDisplayLayout.sideScanFrameOccupiesRow(activeWithData));
+        assertTrue(SonarDisplayLayout.sideScanFrameOccupiesRow(completedEmpty));
+    }
+
+    @Test
     void onePixelSideIsSharedByAllEchoLocations() {
         SonarDisplayLayout.Area area = SonarDisplayLayout.area(new SonarMonitorDimensions(10, 6));
         float pitch = SonarDisplayLayout.echoPixelPitch(area, 51, 128);
@@ -141,6 +205,33 @@ class SonarMathTest {
 
         assertEquals(96, SonarDisplayLayout.compositeDisplayRange(visiblePicture, 128, 16));
         assertEquals(32, SonarDisplayLayout.compositeDisplayRange(List.of(), 128, 32));
+    }
+
+    @Test
+    void sideScanAutoRangeDropsReturnsThatLeftTheVisibleHistory() {
+        SonarFrame oldFarFrame = new SonarFrame(1, 0, 1, true,
+                List.of(new SonarReturn(0, 123, 0, 124 / 128f, 1)));
+        SonarFrame visibleNearFrame = new SonarFrame(2, 2, 3, true,
+                List.of(new SonarReturn(0, 23, 0, 24 / 128f, 1)));
+
+        assertEquals(124, SonarDisplayLayout.compositeDisplayRangeFromFrames(
+                List.of(oldFarFrame, visibleNearFrame), 128, 128));
+        assertEquals(24, SonarDisplayLayout.compositeDisplayRangeFromFrames(
+                List.of(visibleNearFrame), 128, 124));
+    }
+
+    @Test
+    void automaticDisplayRangeUsesRecentHistoryInsteadOfOnlyTheLastPing() {
+        AutoDisplayRangeTracker tracker = new AutoDisplayRangeTracker(3, 128);
+
+        assertEquals(80, tracker.update(80, 128));
+        assertEquals(80, tracker.update(20, 128));
+        assertEquals(80, tracker.update(30, 128));
+        assertEquals(40, tracker.update(40, 128));
+        assertEquals(40, tracker.update(0, 128),
+                "an empty ping must not reset automatic scaling");
+        assertEquals(100, tracker.update(100, 128),
+                "a newly detected farther return must expand the scale immediately");
     }
 
     @Test
@@ -635,6 +726,23 @@ class SonarMathTest {
         assertTrue(bottomEdge.stream().allMatch(leaf ->
                 SonarAdaptiveTracePlan.pitch(leaf, settings) >= SonarKinematics.MIN_PITCH
                         && SonarAdaptiveTracePlan.pitch(leaf, settings) <= SonarKinematics.MAX_PITCH));
+    }
+
+    @Test
+    void sideScanRefinementStaysInsideItsSideAndVerticalFan() {
+        SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
+                128, 3, 90, 5, 9, 16, 5);
+        SonarAdaptiveTracePlan.Leaf rightBottom =
+                new SonarAdaptiveTracePlan.Leaf(0, 0, 90, -45);
+
+        List<SonarAdaptiveTracePlan.Leaf> refinements =
+                SonarAdaptiveTracePlan.sideScanRefinementsForHit(rightBottom, 20, settings);
+        assertEquals(16, refinements.size());
+        assertTrue(refinements.stream().allMatch(leaf -> {
+            double bearing = SonarAdaptiveTracePlan.bearing(leaf, settings);
+            double pitch = SonarAdaptiveTracePlan.pitch(leaf, settings);
+            return bearing >= 88.5 && bearing <= 91.5 && pitch >= -90 && pitch <= 0;
+        }));
     }
 
     @Test

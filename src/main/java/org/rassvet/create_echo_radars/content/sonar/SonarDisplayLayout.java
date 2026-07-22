@@ -18,6 +18,9 @@ public final class SonarDisplayLayout {
     private static final float MAX_VERTICAL_SIZE_MULTIPLIER = 4.0f;
     private static final float ANGULAR_HALF_FILL_WITH_GAPS = 0.42f;
     private static final float ANGULAR_HALF_FILL_SOLID = 0.50f;
+    private static final int SIDE_SCAN_ROWS_PER_BLOCK = 24;
+    private static final int SIDE_SCAN_MIN_ROWS = 24;
+    private static final int SIDE_SCAN_MAX_ROWS = 192;
 
     private SonarDisplayLayout() {}
 
@@ -64,6 +67,63 @@ public final class SonarDisplayLayout {
         return new CircularGeometry(radius, pixelHalfSize, pixelCenterRadius);
     }
 
+    public static int sideScanRowCapacity(Area area) {
+        return sideScanRowCapacity(area, false);
+    }
+
+    public static int sideScanRowCapacity(Area area, boolean historyAlongX) {
+        float historyLength = historyAlongX ? area.width() : area.height();
+        return Math.max(SIDE_SCAN_MIN_ROWS, Math.min(SIDE_SCAN_MAX_ROWS,
+                Math.round(historyLength * SIDE_SCAN_ROWS_PER_BLOCK)));
+    }
+
+    public static boolean sideScanFrameOccupiesRow(SonarFrame frame) {
+        return frame.completedTick() != 0 || !frame.returns().isEmpty();
+    }
+
+    public static SideScanCell sideScanCell(Area area, int rangeBin, int displayRange,
+                                            boolean rightSide, int ageRows,
+                                            boolean pointGaps) {
+        return sideScanCell(area, rangeBin, displayRange, rightSide, ageRows,
+                pointGaps, false, false);
+    }
+
+    public static SideScanCell sideScanCell(Area area, int rangeBin, int displayRange,
+                                            boolean rightSide, int ageRows,
+                                            boolean pointGaps, boolean historyAlongX,
+                                            boolean newestAtMinimum) {
+        int safeRange = Math.max(1, displayRange);
+        int capacity = sideScanRowCapacity(area, historyAlongX);
+        int safeAge = Math.max(0, Math.min(capacity - 1, ageRows));
+        float fill = pointGaps ? PIXEL_FILL_WITH_GAPS : PIXEL_FILL_SOLID;
+        float normalizedDistance = (Math.max(0, Math.min(safeRange - 1, rangeBin)) + 0.5f)
+                / safeRange;
+        float direction = rightSide ? 1 : -1;
+        if (historyAlongX) {
+            float rowWidth = area.width() / capacity;
+            float centerX = newestAtMinimum
+                    ? area.left() + (safeAge + 0.5f) * rowWidth
+                    : area.right() - (safeAge + 0.5f) * rowWidth;
+            float halfWidth = rowWidth * 0.5f * fill;
+            float sideHeight = area.height() * 0.47f;
+            float centerZ = area.centerZ() + direction * normalizedDistance * sideHeight;
+            float halfHeight = sideHeight / safeRange * 0.5f * fill;
+            return new SideScanCell(centerX - halfWidth, centerX + halfWidth,
+                    centerZ - halfHeight, centerZ + halfHeight);
+        }
+
+        float rowHeight = area.height() / capacity;
+        float centerZ = newestAtMinimum
+                ? area.bottom() + (safeAge + 0.5f) * rowHeight
+                : area.top() - (safeAge + 0.5f) * rowHeight;
+        float halfHeight = rowHeight * 0.5f * fill;
+        float sideWidth = area.width() * 0.47f;
+        float centerX = area.centerX() + direction * normalizedDistance * sideWidth;
+        float halfWidth = sideWidth / safeRange * 0.5f * fill;
+        return new SideScanCell(centerX - halfWidth, centerX + halfWidth,
+                centerZ - halfHeight, centerZ + halfHeight);
+    }
+
     public static int compositeDisplayRange(Iterable<SonarReturn> returns, int physicalRange,
                                             int fallbackRange) {
         int safePhysicalRange = Math.max(1, physicalRange);
@@ -72,6 +132,22 @@ public final class SonarDisplayLayout {
             int distance = Math.max(sonarReturn.rangeBin() + 1,
                     (int) Math.ceil(sonarReturn.normalizedDistance() * safePhysicalRange));
             maximum = Math.max(maximum, distance);
+        }
+        if (maximum == 0) return Math.max(1, Math.min(safePhysicalRange, fallbackRange));
+        return Math.max(1, Math.min(safePhysicalRange, maximum));
+    }
+
+    public static int compositeDisplayRangeFromFrames(Iterable<SonarFrame> frames,
+                                                       int physicalRange,
+                                                       int fallbackRange) {
+        int safePhysicalRange = Math.max(1, physicalRange);
+        int maximum = 0;
+        for (SonarFrame frame : frames) {
+            for (SonarReturn sonarReturn : frame.returns()) {
+                int distance = Math.max(sonarReturn.rangeBin() + 1,
+                        (int) Math.ceil(sonarReturn.normalizedDistance() * safePhysicalRange));
+                maximum = Math.max(maximum, distance);
+            }
         }
         if (maximum == 0) return Math.max(1, Math.min(safePhysicalRange, fallbackRange));
         return Math.max(1, Math.min(safePhysicalRange, maximum));
@@ -383,6 +459,8 @@ public final class SonarDisplayLayout {
     public record PixelExtent(float width, float lowerHalfHeight, float upperHalfHeight) {}
 
     public record CircularGeometry(float radius, float pixelHalfSize, float pixelCenterRadius) {}
+
+    public record SideScanCell(float left, float right, float bottom, float top) {}
 
     public record Area(float left, float right, float bottom, float top) {
         public float width() { return right - left; }

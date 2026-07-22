@@ -32,6 +32,8 @@ public final class SonarScanManager {
     private static final float MECHANICAL_MAX_PREFETCH_DEGREES = 120;
     private static final int MECHANICAL_COMPLETED_FRAME_RETENTION_TICKS = 20;
     private static final int MECHANICAL_COMPLETED_FRAME_LIMIT = 32;
+    private static final int AUTO_DISPLAY_RANGE_HISTORY_FRAMES = 16;
+    private static final int SIDE_SCAN_AUTO_DISPLAY_RANGE_HISTORY_FRAMES = 192;
     private static final double REVEAL_SAFETY_BLOCKS = 1.0;
     private static final Map<ServerLevel, SonarScanManager> INSTANCES = new WeakHashMap<>();
 
@@ -208,6 +210,8 @@ public final class SonarScanManager {
         private final LongSet usedChunks = new LongOpenHashSet();
         private final Map<EchoKey, EchoAccumulator> echoes = new HashMap<>();
         private final NearbyBlockTracker detectedHitBlocks = new NearbyBlockTracker();
+        private final List<SideScanRefinementCandidate> sideScanRefinementCandidates =
+                new ArrayList<>();
         private List<RayState> rays = List.of();
         private List<SonarReturn> cachedReturns;
         private SonarFrame cachedCurrentFrame;
@@ -222,6 +226,7 @@ public final class SonarScanManager {
                 new MechanicalFrameWindow<>(MECHANICAL_COMPLETED_FRAME_RETENTION_TICKS,
                         MECHANICAL_COMPLETED_FRAME_LIMIT);
         private int displayRange;
+        private final AutoDisplayRangeTracker autoDisplayRange;
         private long startedTick;
         private long holdUntil;
         private boolean holding;
@@ -233,6 +238,11 @@ public final class SonarScanManager {
         private ScanJob(Descriptor descriptor) {
             this.descriptor = descriptor;
             displayRange = descriptor.range;
+            autoDisplayRange = new AutoDisplayRangeTracker(
+                    descriptor.type == SonarType.SIDE_SCAN_D
+                            ? SIDE_SCAN_AUTO_DISPLAY_RANGE_HISTORY_FRAMES
+                            : AUTO_DISPLAY_RANGE_HISTORY_FRAMES,
+                    descriptor.range);
             startScan(level.getGameTime());
         }
 
@@ -248,13 +258,11 @@ public final class SonarScanManager {
                     && mechanicalCompletedFrames.prune(now)) {
                 invalidateVisibleFrames();
             }
-            SonarChunkReader.Cell emitterCell =
-                    chunkReader.probe(BlockPos.containing(descriptor.origin), usedChunks);
-            if (emitterCell.type() == SonarChunkReader.CellType.PENDING
-                    || emitterCell.type() == SonarChunkReader.CellType.UNKNOWN) {
+            EmitterState emitterState = emitterState();
+            if (emitterState == EmitterState.PENDING) {
                 return;
             }
-            if (emitterCell.type() != SonarChunkReader.CellType.WATER) {
+            if (emitterState == EmitterState.DRY) {
                 clearEchoes();
                 return;
             }
@@ -268,9 +276,12 @@ public final class SonarScanManager {
                     if (now >= holdUntil) startScan(now);
                     else return;
                 } else {
+                    double sideScanMovement = lastSideScanOrigin == null ? 0
+                            : descriptor.origin.distanceTo(lastSideScanOrigin);
                     if (now >= holdUntil && (descriptor.type != SonarType.SIDE_SCAN_D
-                            || lastSideScanOrigin == null
-                            || descriptor.origin.distanceTo(lastSideScanOrigin) >= 0.5)) startScan(now);
+                            || SideScanGeometry.readyForNextPing(
+                            ServerConfig.sideScanMovementOnly(), lastSideScanOrigin != null,
+                            sideScanMovement))) startScan(now);
                     return;
                 }
             }
@@ -291,6 +302,9 @@ public final class SonarScanManager {
             }
             boolean timedOut = now - startedTick >= SCAN_TIMEOUT_TICKS;
             if (complete || timedOut) {
+                if (timedOut && !sideScanRefinementCandidates.isEmpty()) {
+                    flushSideScanCandidatesAsEchoes();
+                }
                 SonarFrame completedFrame = buildFrame(now, complete);
                 if (descriptor.type == SonarType.MECHANICAL_IMAGING_C) {
                     mechanicalCompletedFrames.add(now, completedFrame);
@@ -301,10 +315,37 @@ public final class SonarScanManager {
                 invalidateVisibleFrames();
                 holding = true;
                 holdUntil = descriptor.type == SonarType.MECHANICAL_IMAGING_C
-                        ? now : now + ServerConfig.pingPauseTicks();
+                        ? now : now + (descriptor.type == SonarType.SIDE_SCAN_D
+                        ? ServerConfig.sideScanPingPauseTicks() : ServerConfig.pingPauseTicks());
                 chunkReader.discard(usedChunks);
                 usedChunks.clear();
             }
+        }
+
+        private EmitterState emitterState() {
+            if (descriptor.type != SonarType.SIDE_SCAN_D) {
+                return emitterState(chunkReader.probe(
+                        BlockPos.containing(descriptor.origin), usedChunks));
+            }
+
+            boolean pending = false;
+            for (double side : new double[]{-SideScanGeometry.EMITTER_SIDE_OFFSET,
+                    SideScanGeometry.EMITTER_SIDE_OFFSET}) {
+                Vec3 emitter = descriptor.origin.add(descriptor.right.scale(side));
+                EmitterState state = emitterState(chunkReader.probe(
+                        BlockPos.containing(emitter), usedChunks));
+                if (state == EmitterState.WATER) return EmitterState.WATER;
+                pending |= state == EmitterState.PENDING;
+            }
+            return pending ? EmitterState.PENDING : EmitterState.DRY;
+        }
+
+        private EmitterState emitterState(SonarChunkReader.Cell cell) {
+            return switch (cell.type()) {
+                case WATER -> EmitterState.WATER;
+                case PENDING, UNKNOWN -> EmitterState.PENDING;
+                default -> EmitterState.DRY;
+            };
         }
 
         private void startScan(long now) {
@@ -326,6 +367,7 @@ public final class SonarScanManager {
                         scanDescriptor.autoHeight);
             }
             if (scanDescriptor.type == SonarType.SIDE_SCAN_D) lastSideScanOrigin = scanDescriptor.origin;
+            sideScanRefinementCandidates.clear();
             clearEchoes();
             usedChunks.clear();
             activeBatch = null;
@@ -424,14 +466,24 @@ public final class SonarScanManager {
                 if (ray.finished) continue;
                 ray.distance = rayResult.distance();
                 if (rayResult.hit()) {
-                    boolean canCreateAdditionalRays = scanDescriptor.type != SonarType.SIDE_SCAN_D
-                            && scanDescriptor.type != SonarType.MECHANICAL_IMAGING_C;
-                    if (canCreateAdditionalRays && scanDescriptor.refineOnlyUndetectedNeighbors) {
+                    if (shouldDelaySideScanRefinement(ray)) {
+                        sideScanRefinementCandidates.add(new SideScanRefinementCandidate(
+                                ray, rayResult, hitCell(ray, rayResult.distance())));
+                        ray.finished = true;
+                        continue;
+                    }
+                    boolean canCreateAdditionalRays =
+                            scanDescriptor.type != SonarType.MECHANICAL_IMAGING_C;
+                    if (canCreateAdditionalRays && !ray.leaf.refinement()
+                            && scanDescriptor.refineOnlyUndetectedNeighbors) {
                         canCreateAdditionalRays = !hasNearbyDetectedHit(ray, rayResult.distance());
                     }
                     List<SonarAdaptiveTracePlan.Leaf> children = canCreateAdditionalRays
-                            ? SonarAdaptiveTracePlan.refinementsForHit(
-                                    ray.leaf, rayResult.distance(), settings) : List.of();
+                            ? (scanDescriptor.type == SonarType.SIDE_SCAN_D
+                            ? SonarAdaptiveTracePlan.sideScanRefinementsForHit(
+                            ray.leaf, rayResult.distance(), settings)
+                            : SonarAdaptiveTracePlan.refinementsForHit(
+                            ray.leaf, rayResult.distance(), settings)) : List.of();
                     if (!children.isEmpty()) {
                         if (refinements == null) refinements = new ArrayList<>(children.size());
                         for (SonarAdaptiveTracePlan.Leaf leaf : children) {
@@ -449,6 +501,10 @@ public final class SonarScanManager {
                     ray.finished = true;
                 }
             }
+            if (allPrimaryRaysFinished() && !sideScanRefinementCandidates.isEmpty()) {
+                if (refinements == null) refinements = new ArrayList<>();
+                echoesChanged |= resolveSideScanRefinementCandidates(refinements, settings);
+            }
             if (refinements != null) {
                 List<RayState> next = new ArrayList<>(rays.size() + refinements.size());
                 next.addAll(rays);
@@ -459,11 +515,68 @@ public final class SonarScanManager {
             else invalidateProgress();
         }
 
-        private boolean hasNearbyDetectedHit(RayState ray, double distance) {
+        private boolean shouldDelaySideScanRefinement(RayState ray) {
+            return scanDescriptor.type == SonarType.SIDE_SCAN_D
+                    && scanDescriptor.refineOnlyUndetectedNeighbors
+                    && !ray.leaf.refinement();
+        }
+
+        private boolean allPrimaryRaysFinished() {
+            for (RayState ray : rays) {
+                if (!ray.leaf.refinement() && !ray.finished) return false;
+            }
+            return true;
+        }
+
+        private boolean resolveSideScanRefinementCandidates(
+                List<RayState> refinements, SonarAdaptiveTracePlan.Settings settings) {
+            List<SideScanHitFilter.Cell> hits = new ArrayList<>(
+                    sideScanRefinementCandidates.size());
+            for (SideScanRefinementCandidate candidate : sideScanRefinementCandidates) {
+                hits.add(candidate.cell());
+            }
+            boolean[] refinementAllowed = SideScanHitFilter.refinementsAllowed(hits);
+            boolean echoesChanged = false;
+            for (int i = 0; i < sideScanRefinementCandidates.size(); i++) {
+                SideScanRefinementCandidate candidate = sideScanRefinementCandidates.get(i);
+                List<SonarAdaptiveTracePlan.Leaf> children = refinementAllowed[i]
+                        ? SonarAdaptiveTracePlan.sideScanRefinementsForHit(
+                        candidate.ray().leaf, candidate.result().distance(), settings)
+                        : List.of();
+                if (children.isEmpty()) {
+                    addEcho(candidate.ray(), candidate.result(), settings);
+                    echoesChanged = true;
+                } else {
+                    for (SonarAdaptiveTracePlan.Leaf leaf : children) {
+                        refinements.add(new RayState(leaf, leaf.refinementStartDistance()));
+                    }
+                }
+            }
+            sideScanRefinementCandidates.clear();
+            return echoesChanged;
+        }
+
+        private void flushSideScanCandidatesAsEchoes() {
+            SonarAdaptiveTracePlan.Settings settings = scanDescriptor.traceSettings();
+            for (SideScanRefinementCandidate candidate : sideScanRefinementCandidates) {
+                addEcho(candidate.ray(), candidate.result(), settings);
+            }
+            sideScanRefinementCandidates.clear();
+            invalidateReturns();
+        }
+
+        private SideScanHitFilter.Cell hitCell(RayState ray, double distance) {
             Vec3 hit = ray.origin(scanDescriptor).add(
                     ray.direction(scanDescriptor).scale(distance + 1.0e-4));
-            return detectedHitBlocks.hasNearbyAndRecord(
-                    (int) Math.floor(hit.x), (int) Math.floor(hit.y), (int) Math.floor(hit.z));
+            int x = (int) Math.floor(hit.x);
+            int y = (int) Math.floor(hit.y);
+            int z = (int) Math.floor(hit.z);
+            return new SideScanHitFilter.Cell(x, y, z);
+        }
+
+        private boolean hasNearbyDetectedHit(RayState ray, double distance) {
+            SideScanHitFilter.Cell hit = hitCell(ray, distance);
+            return detectedHitBlocks.hasNearbyAndRecord(hit.x(), hit.y(), hit.z());
         }
 
         private void addEcho(RayState ray, SonarTraceExecutor.RayResult rayResult,
@@ -566,7 +679,8 @@ public final class SonarScanManager {
 
         private void updateDisplayRange(SonarFrame frame) {
             int nextDisplayRange = scanDescriptor.autoHeight
-                    ? detectedRange(frame, scanDescriptor.range) : scanDescriptor.range;
+                    ? autoDisplayRange.update(detectedRange(frame, scanDescriptor.range),
+                    scanDescriptor.range) : scanDescriptor.range;
             if (displayRange == nextDisplayRange) return;
             displayRange = nextDisplayRange;
             invalidateSnapshot();
@@ -609,15 +723,10 @@ public final class SonarScanManager {
             return rays;
         }
         if (descriptor.type == SonarType.SIDE_SCAN_D) {
-            int horizontalSamples = Math.min(5, descriptor.horizontalBeams);
-            List<RayState> rays = new ArrayList<>(horizontalSamples * descriptor.verticalBeams * 2);
-            for (int horizontal = 0; horizontal < horizontalSamples; horizontal++) {
-                int beam = sampledBeam(horizontal, horizontalSamples, descriptor.horizontalBeams);
-                for (int vertical = 0; vertical < descriptor.verticalBeams; vertical++) {
-                    rays.add(new RayState(new SonarAdaptiveTracePlan.Leaf(beam, vertical, -90, -45), 0));
-                    rays.add(new RayState(new SonarAdaptiveTracePlan.Leaf(beam, vertical, 90, -45), 0));
-                }
-            }
+            List<SonarAdaptiveTracePlan.Leaf> leaves = SideScanGeometry.createLeaves(
+                    descriptor.horizontalBeams, descriptor.verticalBeams);
+            List<RayState> rays = new ArrayList<>(leaves.size());
+            for (SonarAdaptiveTracePlan.Leaf leaf : leaves) rays.add(new RayState(leaf, 0));
             return rays;
         }
         List<RayState> rays = new ArrayList<>(descriptor.horizontalBeams * descriptor.verticalBeams);
@@ -628,11 +737,6 @@ public final class SonarScanManager {
             }
         }
         return rays;
-    }
-
-    private static int sampledBeam(int sample, int sampleCount, int beamCount) {
-        if (sampleCount <= 1 || beamCount <= 1) return Math.max(0, beamCount / 2);
-        return (int) Math.round(sample * (beamCount - 1) / (double) (sampleCount - 1));
     }
 
     static void collectSections(Vec3 origin, Vec3 direction, double startDistance, double endDistance,
@@ -769,7 +873,7 @@ public final class SonarScanManager {
                     (int) Math.ceil(sonarReturn.normalizedDistance() * range));
             max = Math.max(max, distance);
         }
-        return clamp(max == 0 ? range : max, 1, range);
+        return max == 0 ? 0 : clamp(max, 1, range);
     }
 
     private static int clamp(int value, int min, int max) {
@@ -811,6 +915,9 @@ public final class SonarScanManager {
                             double directionX, double directionY, double directionZ,
                             double startDistance, double endDistance) {}
 
+    private record SideScanRefinementCandidate(
+            RayState ray, SonarTraceExecutor.RayResult result, SideScanHitFilter.Cell cell) {}
+
     private static final class RayState {
         private final SonarAdaptiveTracePlan.Leaf leaf;
         private double distance;
@@ -849,9 +956,15 @@ public final class SonarScanManager {
                         descriptor.displayOrigin, displayOrientation, absoluteBearing);
             }
             if (descriptor.type != SonarType.SIDE_SCAN_D) return descriptor.origin;
-            double side = leaf.bearingOffset() < 0 ? -0.501 : 0.501;
+            double side = SideScanGeometry.emitterSideOffset(leaf);
             return descriptor.origin.add(descriptor.right.scale(side));
         }
+    }
+
+    private enum EmitterState {
+        WATER,
+        PENDING,
+        DRY
     }
 
     record EchoKey(int beam, int vertical, int rangeBin,

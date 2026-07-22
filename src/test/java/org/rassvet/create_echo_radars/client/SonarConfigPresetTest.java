@@ -13,9 +13,13 @@ class SonarConfigPresetTest {
             for (SonarType type : SonarType.values()) {
                 SonarConfigPreset.BeamSettings beams = preset.beams(type);
                 assertNotNull(beams, () -> preset + " has no settings for " + type);
-                assertTrue(beams.horizontal() >= 11 && beams.horizontal() <= 121);
+                int minimumHorizontal = type == SonarType.SIDE_SCAN_D ? 1 : 11;
+                int maximumHorizontal = type == SonarType.SIDE_SCAN_D ? 5 : 121;
+                int minimumVertical = type == SonarType.SIDE_SCAN_D ? 9 : 1;
+                assertTrue(beams.horizontal() >= minimumHorizontal
+                        && beams.horizontal() <= maximumHorizontal);
                 assertTrue((beams.horizontal() & 1) == 1, "Horizontal beam count must be odd");
-                assertTrue(beams.vertical() >= 1 && beams.vertical() <= 50);
+                assertTrue(beams.vertical() >= minimumVertical && beams.vertical() <= 50);
             }
             assertTrue(preset.additionalRays() == 4
                     || preset.additionalRays() == 8

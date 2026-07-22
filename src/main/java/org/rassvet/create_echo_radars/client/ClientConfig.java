@@ -12,6 +12,7 @@ public final class ClientConfig {
     private static final ModConfigSpec.IntValue OLD_PIXEL_LIFETIME_TICKS;
     private static final ModConfigSpec.IntValue MECHANICAL_PIXEL_LIFETIME_TICKS;
     private static final ModConfigSpec.BooleanValue CLEAR_OLD_PIXELS_WHEN_REFRESHED;
+    private static final ModConfigSpec.EnumValue<SideScanDataPosition> SIDE_SCAN_DATA_POSITION;
     private static final ModConfigSpec.EnumValue<SonarDebugRayMode> DEBUG_RAY_MODE;
 
     static {
@@ -40,6 +41,9 @@ public final class ClientConfig {
         CLEAR_OLD_PIXELS_WHEN_REFRESHED = builder
                 .comment("Immediately clear older sonar frames when the newest screen reveal reaches 100%.")
                 .define("monitor.clearOldPixelsWhenRefreshed", true);
+        SIDE_SCAN_DATA_POSITION = builder
+                .comment("Screen edge where new side-scan history frames appear.")
+                .defineEnum("monitor.sideScanDataPosition", SideScanDataPosition.BOTTOM);
         DEBUG_RAY_MODE = builder
                 .comment("Rays shown by the sonar debug tracer: OFF, MAIN, BEFORE_BLOCK, or ALL.")
                 .defineEnum("debug.rayMode", SonarDebugRayMode.ALL);
@@ -84,6 +88,10 @@ public final class ClientConfig {
         return CLEAR_OLD_PIXELS_WHEN_REFRESHED.get();
     }
 
+    public static SideScanDataPosition sideScanDataPosition() {
+        return SIDE_SCAN_DATA_POSITION.get();
+    }
+
     public static SonarDebugRayMode debugRayMode() {
         return DEBUG_RAY_MODE.get();
     }
@@ -91,7 +99,8 @@ public final class ClientConfig {
     public static void save(SonarPalette palette, double gain, double speckle, boolean pointGaps,
                             boolean blockSizedPixels,
                             int oldPixelLifetimeTicks, int mechanicalPixelLifetimeTicks,
-                            boolean clearOldPixelsWhenRefreshed) {
+                            boolean clearOldPixelsWhenRefreshed,
+                            SideScanDataPosition sideScanDataPosition) {
         PALETTE.set(palette);
         GAIN.set(gain);
         SPECKLE.set(speckle);
@@ -100,6 +109,7 @@ public final class ClientConfig {
         OLD_PIXEL_LIFETIME_TICKS.set(Math.max(-1, Math.min(200, oldPixelLifetimeTicks)));
         MECHANICAL_PIXEL_LIFETIME_TICKS.set(Math.max(0, Math.min(400, mechanicalPixelLifetimeTicks)));
         CLEAR_OLD_PIXELS_WHEN_REFRESHED.set(clearOldPixelsWhenRefreshed);
+        SIDE_SCAN_DATA_POSITION.set(sideScanDataPosition);
         SPEC.save();
     }
 

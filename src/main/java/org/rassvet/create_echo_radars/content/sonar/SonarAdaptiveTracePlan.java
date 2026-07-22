@@ -50,6 +50,20 @@ public final class SonarAdaptiveTracePlan {
     }
 
     public static List<Leaf> refinementsForHit(Leaf leaf, double hitDistance, Settings settings) {
+        return refinementsForHit(leaf, hitDistance, settings, 0, 0);
+    }
+
+    public static List<Leaf> sideScanRefinementsForHit(Leaf leaf, double hitDistance,
+                                                       Settings settings) {
+        double bearingCenter = leaf.bearingOffset < 0
+                ? -SideScanGeometry.CENTER_YAW_DEGREES
+                : SideScanGeometry.CENTER_YAW_DEGREES;
+        return refinementsForHit(leaf, hitDistance, settings, bearingCenter,
+                SideScanGeometry.CENTER_PITCH_DEGREES);
+    }
+
+    private static List<Leaf> refinementsForHit(Leaf leaf, double hitDistance, Settings settings,
+                                                double bearingCenter, double pitchCenter) {
         if (leaf.refinement || settings.hitRefinementBacktrackBlocks <= 0) return List.of();
         double start = Math.max(0, hitDistance - settings.hitRefinementBacktrackBlocks);
         double resolution = refinementOffsetDegrees(hitDistance);
@@ -57,14 +71,18 @@ public final class SonarAdaptiveTracePlan {
         double currentPitch = pitch(leaf, settings);
         double horizontalRadius = Math.min(resolution, horizontalStep(settings) * 0.5);
         double verticalRadius = Math.min(resolution, verticalStep(settings) * 0.5);
+        double minimumBearing = bearingCenter - settings.sector / 2.0;
+        double maximumBearing = bearingCenter + settings.sector / 2.0;
+        double minimumPitch = pitchCenter - settings.verticalSector / 2.0;
+        double maximumPitch = pitchCenter + settings.verticalSector / 2.0;
         double negativeBearing = Math.min(horizontalRadius,
-                Math.max(0, currentBearing + settings.sector / 2.0));
+                Math.max(0, currentBearing - minimumBearing));
         double positiveBearing = Math.min(horizontalRadius,
-                Math.max(0, settings.sector / 2.0 - currentBearing));
+                Math.max(0, maximumBearing - currentBearing));
         double negativePitch = Math.min(verticalRadius,
-                Math.max(0, currentPitch + settings.verticalSector / 2.0));
+                Math.max(0, currentPitch - minimumPitch));
         double positivePitch = Math.min(verticalRadius,
-                Math.max(0, settings.verticalSector / 2.0 - currentPitch));
+                Math.max(0, maximumPitch - currentPitch));
 
         List<Leaf> refinements = new ArrayList<>(settings.additionalRays);
         for (int i = 0; i < settings.additionalRays; i++) {

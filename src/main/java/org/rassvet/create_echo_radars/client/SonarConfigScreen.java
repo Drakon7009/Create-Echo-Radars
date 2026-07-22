@@ -94,6 +94,23 @@ public final class SonarConfigScreen {
                                 .valueFormatter(SonarConfigScreen::mechanicalPixelLifetimeText))
                         .build())
                         .build())
+                .group(OptionGroup.createBuilder()
+                        .name(Component.translatable("config.create_echo_radars.group.monitor.side_scan"))
+                        .option(Option.<SideScanDataPosition>createBuilder()
+                                .name(Component.translatable(
+                                        "config.create_echo_radars.side_scan_data_position"))
+                                .description(description(
+                                        "config.create_echo_radars.side_scan_data_position.description"))
+                                .binding(SideScanDataPosition.BOTTOM,
+                                        () -> values.sideScanDataPosition,
+                                        value -> values.sideScanDataPosition = value)
+                                .controller(option -> EnumControllerBuilder.create(option)
+                                        .enumClass(SideScanDataPosition.class)
+                                        .valueFormatter(value -> Component.translatable(
+                                                "config.create_echo_radars.side_scan_data_position."
+                                                        + value.name().toLowerCase())))
+                                .build())
+                        .build())
                 .build();
     }
 
@@ -135,6 +152,8 @@ public final class SonarConfigScreen {
                 .option(options.hitRefinementBacktrackBlocks)
                 .option(options.blocksPerTick)
                 .option(options.pingPauseTicks)
+                .option(options.sideScanPingPauseTicks)
+                .option(options.sideScanMovementOnly)
                 .option(options.maxConcurrentChunkReads)
                 .option(options.traceWorkerThreads)
                 .option(options.entityOcclusionCheck)
@@ -223,12 +242,14 @@ public final class SonarConfigScreen {
         ClientConfig.save(values.palette, values.gain, values.speckle, values.pointGaps,
                 values.blockSizedPixels,
                 values.oldPixelLifetimeTicks, values.mechanicalPixelLifetimeTicks,
-                values.clearOldPixelsWhenRefreshed);
+                values.clearOldPixelsWhenRefreshed, values.sideScanDataPosition);
         if (!operatorAllowed) return;
         ClientConfig.saveDebug(values.debugRayMode);
         ModNetworking.sendServerConfig(values.horizontalBeams(), values.verticalBeams(),
                 values.additionalRays, values.refineOnlyUndetectedNeighbors,
                 values.hitRefinementBacktrackBlocks, values.blocksPerTick, values.pingPauseTicks,
+                values.sideScanPingPauseTicks,
+                values.sideScanMovementOnly,
                 values.maxConcurrentChunkReads, values.traceWorkerThreads,
                 values.entityOcclusionCheck, values.traceTimeProfiling);
     }
@@ -242,6 +263,7 @@ public final class SonarConfigScreen {
         private int oldPixelLifetimeTicks = ClientConfig.oldPixelLifetimeTicks();
         private int mechanicalPixelLifetimeTicks = ClientConfig.mechanicalPixelLifetimeTicks();
         private boolean clearOldPixelsWhenRefreshed = ClientConfig.clearOldPixelsWhenRefreshed();
+        private SideScanDataPosition sideScanDataPosition = ClientConfig.sideScanDataPosition();
         private SonarDebugRayMode debugRayMode = ClientConfig.debugRayMode();
         private final Map<SonarType, ServerConfig.BeamSettings> beams = new EnumMap<>(SonarType.class);
         private int additionalRays = SyncedServerConfig.additionalRays();
@@ -249,6 +271,8 @@ public final class SonarConfigScreen {
         private int hitRefinementBacktrackBlocks = SyncedServerConfig.hitRefinementBacktrackBlocks();
         private int blocksPerTick = SyncedServerConfig.blocksPerTick();
         private int pingPauseTicks = SyncedServerConfig.pingPauseTicks();
+        private int sideScanPingPauseTicks = SyncedServerConfig.sideScanPingPauseTicks();
+        private boolean sideScanMovementOnly = SyncedServerConfig.sideScanMovementOnly();
         private int maxConcurrentChunkReads = SyncedServerConfig.maxConcurrentChunkReads();
         private int traceWorkerThreads = SyncedServerConfig.traceWorkerThreads();
         private boolean entityOcclusionCheck = SyncedServerConfig.entityOcclusionCheck();
@@ -291,6 +315,8 @@ public final class SonarConfigScreen {
         private final Option<Integer> hitRefinementBacktrackBlocks;
         private final Option<Integer> blocksPerTick;
         private final Option<Integer> pingPauseTicks;
+        private final Option<Integer> sideScanPingPauseTicks;
+        private final Option<Boolean> sideScanMovementOnly;
         private final Option<Integer> maxConcurrentChunkReads;
         private final Option<Integer> traceWorkerThreads;
         private final Option<Boolean> entityOcclusionCheck;
@@ -298,13 +324,16 @@ public final class SonarConfigScreen {
         private OperatorOptions(Values values) {
             for (SonarType type : SonarType.values()) {
                 horizontalBeams.put(type, intOption("config.create_echo_radars.server.horizontal_beams",
-                        ServerConfig.DEFAULT_HORIZONTAL_BEAMS,
+                        ServerConfig.defaultHorizontalBeams(type),
                         () -> values.beams.get(type).horizontal(),
-                        value -> values.setHorizontalBeams(type, value), 11, 121, 2));
+                        value -> values.setHorizontalBeams(type, value),
+                        ServerConfig.minimumHorizontalBeams(type),
+                        ServerConfig.maximumHorizontalBeams(type), 2));
                 verticalBeams.put(type, intOption("config.create_echo_radars.server.vertical_beams",
-                        ServerConfig.DEFAULT_VERTICAL_BEAMS,
+                        ServerConfig.defaultVerticalBeams(type),
                         () -> values.beams.get(type).vertical(),
-                        value -> values.setVerticalBeams(type, value), 1, 50, 1));
+                        value -> values.setVerticalBeams(type, value),
+                        ServerConfig.minimumVerticalBeams(type), 50, 1));
             }
             additionalRays = Option.<AdditionalRayCount>createBuilder()
                     .name(Component.translatable("config.create_echo_radars.server.additional_rays"))
@@ -328,6 +357,14 @@ public final class SonarConfigScreen {
                     () -> values.blocksPerTick, value -> values.blocksPerTick = value, 1, 16, 1);
             pingPauseTicks = intOption("config.create_echo_radars.server.ping_pause_ticks", 20,
                     () -> values.pingPauseTicks, value -> values.pingPauseTicks = value, 0, 200, 1);
+            sideScanPingPauseTicks = intOption(
+                    "config.create_echo_radars.server.side_scan_ping_pause_ticks", 20,
+                    () -> values.sideScanPingPauseTicks,
+                    value -> values.sideScanPingPauseTicks = value, 0, 200, 1);
+            sideScanMovementOnly = booleanOption(
+                    "config.create_echo_radars.server.side_scan_movement_only", false,
+                    () -> values.sideScanMovementOnly,
+                    value -> values.sideScanMovementOnly = value);
             maxConcurrentChunkReads = intOption("config.create_echo_radars.server.max_chunk_reads", 2,
                     () -> values.maxConcurrentChunkReads,
                     value -> values.maxConcurrentChunkReads = value, 1, 8, 1);
@@ -349,6 +386,7 @@ public final class SonarConfigScreen {
             hitRefinementBacktrackBlocks.requestSet(preset.hitRefinementBacktrackBlocks());
             blocksPerTick.requestSet(preset.blocksPerTick());
             pingPauseTicks.requestSet(preset.pingPauseTicks());
+            sideScanPingPauseTicks.requestSet(preset.pingPauseTicks());
             maxConcurrentChunkReads.requestSet(preset.maxConcurrentChunkReads());
             traceWorkerThreads.requestSet(preset.traceWorkerThreads());
             entityOcclusionCheck.requestSet(preset.entityOcclusionCheck());

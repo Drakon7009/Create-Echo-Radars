@@ -45,6 +45,14 @@ public final class SyncedServerConfig {
         return current.pingPauseTicks;
     }
 
+    public static int sideScanPingPauseTicks() {
+        return current.sideScanPingPauseTicks;
+    }
+
+    public static boolean sideScanMovementOnly() {
+        return current.sideScanMovementOnly;
+    }
+
     public static int maxConcurrentChunkReads() {
         return current.maxConcurrentChunkReads;
     }
@@ -64,11 +72,14 @@ public final class SyncedServerConfig {
     public static void apply(int[] horizontalBeams, int[] verticalBeams,
                              int additionalRays, boolean refineOnlyUndetectedNeighbors,
                              int hitRefinementBacktrackBlocks, int blocksPerTick, int pingPauseTicks,
+                             int sideScanPingPauseTicks,
+                             boolean sideScanMovementOnly,
                              int maxConcurrentChunkReads, int traceWorkerThreads,
                              boolean entityOcclusionCheck, boolean traceTimeProfiling) {
         current = new Snapshot(horizontalBeams, verticalBeams, additionalRays,
                 refineOnlyUndetectedNeighbors, hitRefinementBacktrackBlocks, blocksPerTick,
-                pingPauseTicks, maxConcurrentChunkReads, traceWorkerThreads,
+                pingPauseTicks, sideScanPingPauseTicks, sideScanMovementOnly,
+                maxConcurrentChunkReads, traceWorkerThreads,
                 entityOcclusionCheck, traceTimeProfiling);
     }
 
@@ -84,6 +95,8 @@ public final class SyncedServerConfig {
         return new Snapshot(horizontalBeams, verticalBeams, ServerConfig.additionalRays(),
                 ServerConfig.refineOnlyUndetectedNeighbors(), ServerConfig.hitRefinementBacktrackBlocks(),
                 ServerConfig.blocksPerTick(), ServerConfig.pingPauseTicks(),
+                ServerConfig.sideScanPingPauseTicks(),
+                ServerConfig.sideScanMovementOnly(),
                 ServerConfig.maxConcurrentChunkReads(), ServerConfig.traceWorkerThreads(),
                 ServerConfig.entityOcclusionCheck(), ServerConfig.traceTimeProfiling());
     }
@@ -91,6 +104,8 @@ public final class SyncedServerConfig {
     public record Snapshot(int[] horizontalBeams, int[] verticalBeams,
                            int additionalRays, boolean refineOnlyUndetectedNeighbors,
                            int hitRefinementBacktrackBlocks, int blocksPerTick, int pingPauseTicks,
+                           int sideScanPingPauseTicks,
+                           boolean sideScanMovementOnly,
                            int maxConcurrentChunkReads, int traceWorkerThreads,
                            boolean entityOcclusionCheck, boolean traceTimeProfiling) {
         public Snapshot {
@@ -107,10 +122,11 @@ public final class SyncedServerConfig {
             int[] horizontalBeams = new int[count];
             int[] verticalBeams = new int[count];
             for (int i = 0; i < count; i++) {
-                horizontalBeams[i] = ServerConfig.DEFAULT_HORIZONTAL_BEAMS;
-                verticalBeams[i] = ServerConfig.DEFAULT_VERTICAL_BEAMS;
+                SonarType type = SonarType.values()[i];
+                horizontalBeams[i] = ServerConfig.defaultHorizontalBeams(type);
+                verticalBeams[i] = ServerConfig.defaultVerticalBeams(type);
             }
-            return new Snapshot(horizontalBeams, verticalBeams, 4, false, 5, 10, 20,
+            return new Snapshot(horizontalBeams, verticalBeams, 4, false, 5, 10, 20, 20, false,
                     2, ServerConfig.defaultTraceWorkerThreads(), false, false);
         }
     }
