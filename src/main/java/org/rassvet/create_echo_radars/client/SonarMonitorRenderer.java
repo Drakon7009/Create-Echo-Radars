@@ -44,6 +44,8 @@ public final class SonarMonitorRenderer {
     private static final float ECHO_DEPTH = 0.952f;
     private static final float TRACK_DEPTH = 0.957f;
     private static final float LABEL_DEPTH = 0.975f;
+    private static final float SIDE_SCAN_LABEL_SCALE = 1.70f;
+    private static final float SIDE_SCAN_LABEL_INSET = 0.70f;
     private static final int ARC_STEPS = 48;
     private static final float REVEAL_COMPLETE_EPSILON = 1.0e-4f;
     private static final float REVEAL_EDGE_MIN_WIDTH = 0.035f;
@@ -423,22 +425,22 @@ public final class SonarMonitorRenderer {
         SideScanDataPosition position = layout.position();
 
         if (position == SideScanDataPosition.BOTTOM || position == SideScanDataPosition.TOP) {
-            float bottomZ = (plot.bottom() + layout.outerArea().bottom()) * 0.5f;
-            float topZ = (plot.top() + layout.outerArea().top()) * 0.5f;
+            float bottomZ = sideScanLabelPosition(layout.outerArea().bottom(), plot.bottom());
+            float topZ = sideScanLabelPosition(layout.outerArea().top(), plot.top());
             for (int division = -3; division <= 3; division++) {
                 float x = plot.centerX() + plot.width() * 0.47f * division / 3f;
                 int distance = Math.round(displayRange * Math.abs(division) / 3f);
-                drawLabel(distance + "m", x, bottomZ, poseStack, buffers, size);
-                drawLabel(distance + "m", x, topZ, poseStack, buffers, size);
+                drawSideScanLabel(distance + "m", x, bottomZ, poseStack, buffers, size);
+                drawSideScanLabel(distance + "m", x, topZ, poseStack, buffers, size);
             }
         } else {
-            float leftX = (layout.outerArea().left() + plot.left()) * 0.5f;
-            float rightX = (plot.right() + layout.outerArea().right()) * 0.5f;
+            float leftX = sideScanLabelPosition(layout.outerArea().left(), plot.left());
+            float rightX = sideScanLabelPosition(layout.outerArea().right(), plot.right());
             for (int division = -3; division <= 3; division++) {
                 float z = plot.centerZ() + plot.height() * 0.47f * division / 3f;
                 int distance = Math.round(displayRange * Math.abs(division) / 3f);
-                drawLabel(distance + "m", leftX, z, poseStack, buffers, size);
-                drawLabel(distance + "m", rightX, z, poseStack, buffers, size);
+                drawSideScanLabel(distance + "m", leftX, z, poseStack, buffers, size);
+                drawSideScanLabel(distance + "m", rightX, z, poseStack, buffers, size);
             }
         }
 
@@ -446,25 +448,29 @@ public final class SonarMonitorRenderer {
             int age = sideScanAgeSeconds(frames, currentTick, division, 5);
             String label = age == 0 ? "0s" : "-" + age + "s";
             if (position == SideScanDataPosition.BOTTOM || position == SideScanDataPosition.TOP) {
-                float leftX = (layout.outerArea().left() + plot.left()) * 0.5f;
-                float rightX = (plot.right() + layout.outerArea().right()) * 0.5f;
+                float leftX = sideScanLabelPosition(layout.outerArea().left(), plot.left());
+                float rightX = sideScanLabelPosition(layout.outerArea().right(), plot.right());
                 float progress = division / 5f;
                 float z = position == SideScanDataPosition.BOTTOM
                         ? plot.bottom() + plot.height() * progress
                         : plot.top() - plot.height() * progress;
-                drawLabel(label, leftX, z, poseStack, buffers, size);
-                drawLabel(label, rightX, z, poseStack, buffers, size);
+                drawSideScanLabel(label, leftX, z, poseStack, buffers, size);
+                drawSideScanLabel(label, rightX, z, poseStack, buffers, size);
             } else {
-                float bottomZ = (plot.bottom() + layout.outerArea().bottom()) * 0.5f;
-                float topZ = (plot.top() + layout.outerArea().top()) * 0.5f;
+                float bottomZ = sideScanLabelPosition(layout.outerArea().bottom(), plot.bottom());
+                float topZ = sideScanLabelPosition(layout.outerArea().top(), plot.top());
                 float progress = division / 5f;
                 float x = position == SideScanDataPosition.RIGHT
                         ? plot.right() - plot.width() * progress
                         : plot.left() + plot.width() * progress;
-                drawLabel(label, x, bottomZ, poseStack, buffers, size);
-                drawLabel(label, x, topZ, poseStack, buffers, size);
+                drawSideScanLabel(label, x, bottomZ, poseStack, buffers, size);
+                drawSideScanLabel(label, x, topZ, poseStack, buffers, size);
             }
         }
+    }
+
+    private static float sideScanLabelPosition(float outerEdge, float plotEdge) {
+        return outerEdge + (plotEdge - outerEdge) * SIDE_SCAN_LABEL_INSET;
     }
 
     private static int sideScanAgeSeconds(List<VisibleOrdinaryFrame> frames,
@@ -1075,11 +1081,21 @@ public final class SonarMonitorRenderer {
 
     private static void drawLabel(String text, float x, float z, PoseStack poseStack,
                                   MultiBufferSource buffers, float size) {
+        drawLabel(text, x, z, poseStack, buffers, size, 1);
+    }
+
+    private static void drawSideScanLabel(String text, float x, float z, PoseStack poseStack,
+                                          MultiBufferSource buffers, float size) {
+        drawLabel(text, x, z, poseStack, buffers, size, SIDE_SCAN_LABEL_SCALE);
+    }
+
+    private static void drawLabel(String text, float x, float z, PoseStack poseStack,
+                                  MultiBufferSource buffers, float size, float scaleMultiplier) {
         Font font = Minecraft.getInstance().font;
         poseStack.pushPose();
         poseStack.translate(x, LABEL_DEPTH, z);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
-        float scale = 0.0022f * Math.min(1.35f, size / 2f);
+        float scale = 0.0022f * Math.min(1.35f, size / 2f) * scaleMultiplier;
         poseStack.scale(scale, scale, scale);
         font.drawInBatch(text, -font.width(text) / 2f, 0, 0xdde8e8e8, false,
                 poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, 0xF000F0);
