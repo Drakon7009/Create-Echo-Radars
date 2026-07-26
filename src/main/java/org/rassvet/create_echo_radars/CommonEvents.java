@@ -36,7 +36,7 @@ public final class CommonEvents {
 
     private static void blockPlaced(BlockEvent.EntityPlaceEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level)
-                || !SonarGlass.isGlass(event.getPlacedBlock())) return;
+                || !SonarGlass.isGlass(level, event.getPos())) return;
         SonarGlassNetwork.Component component = SonarGlassNetwork.find(level, event.getPos());
         NetworkData data = NetworkData.get(level);
         int linked = 0;

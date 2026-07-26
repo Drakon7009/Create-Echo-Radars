@@ -14,7 +14,7 @@ public final class SonarGlassNetwork {
 
     public static Component find(Level level, BlockPos start) {
         SonarGlassFloodFill.Result result = SonarGlassFloodFill.find(start.asLong(),
-                packed -> SonarGlass.isGlass(level.getBlockState(BlockPos.of(packed))),
+                packed -> SonarGlass.isGlass(level, BlockPos.of(packed)),
                 packed -> Arrays.stream(Direction.values()).mapToLong(direction ->
                         BlockPos.of(packed).relative(direction).asLong()).toArray(), MAX_BLOCKS);
         return new Component(result.nodes().stream().map(BlockPos::of).collect(

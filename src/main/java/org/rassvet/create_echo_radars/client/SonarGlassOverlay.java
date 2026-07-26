@@ -15,10 +15,13 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.GameRenderer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.CrossCollisionBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
+import net.minecraft.world.level.block.state.properties.Half;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.fml.ModList;
@@ -57,6 +60,8 @@ public final class SonarGlassOverlay {
     private static Vec3 cameraPosition = Vec3.ZERO;
     private static float framePartialTick;
     private static long geometryGeneration;
+    private static long lastGeometryCheckTick = Long.MIN_VALUE;
+    private static long lastGeometrySignature = Long.MIN_VALUE;
     private static boolean sodiumOpaqueDepthCaptured;
     private static boolean sodiumWorldCutoutDepthCaptured;
     private static boolean sodiumOpaqueCaptureLogged;
@@ -138,7 +143,37 @@ public final class SonarGlassOverlay {
         }
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
             minecraft.getMainRenderTarget().bindWrite(true);
+            refreshCopycatGeometry(minecraft);
             renderDepthWorld(framePartialTick);
+        }
+    }
+
+    private static void refreshCopycatGeometry(Minecraft minecraft) {
+        if (minecraft.level == null) return;
+        long now = minecraft.level.getGameTime();
+        if (!ModList.get().isLoaded("copycats")
+                || (lastGeometryCheckTick != Long.MIN_VALUE
+                && now - lastGeometryCheckTick < 20)) return;
+        lastGeometryCheckTick = now;
+
+        long signature = 1;
+        List<SonarGlassBlockEntity> endpoints = new ArrayList<>(
+                activeEndpoints(minecraft));
+        endpoints.sort(java.util.Comparator.comparingLong(
+                endpoint -> endpoint.getBlockPos().asLong()));
+        for (SonarGlassBlockEntity endpoint : endpoints) {
+            List<BlockPos> blocks = new ArrayList<>(SonarGlassNetwork.find(
+                    minecraft.level, endpoint.getBlockPos()).blocks());
+            blocks.sort(java.util.Comparator.comparingLong(BlockPos::asLong));
+            for (BlockPos pos : blocks) {
+                signature = signature * 31 + pos.asLong();
+                signature = signature * 31
+                        + minecraft.level.getBlockState(pos).hashCode();
+            }
+        }
+        if (signature != lastGeometrySignature) {
+            lastGeometrySignature = signature;
+            invalidate();
         }
     }
 
@@ -261,10 +296,10 @@ public final class SonarGlassOverlay {
                         || state.getValue(CrossCollisionBlock.SOUTH);
                 boolean eastWest = state.getValue(CrossCollisionBlock.EAST)
                         || state.getValue(CrossCollisionBlock.WEST);
-                double minY = SonarGlass.isGlass(endpoint.getLevel().getBlockState(
-                        pos.below())) ? 0 : .05;
-                double maxY = SonarGlass.isGlass(endpoint.getLevel().getBlockState(
-                        pos.above())) ? 1 : .95;
+                double minY = SonarGlass.isGlass(endpoint.getLevel(),
+                        pos.below()) ? 0 : .05;
+                double maxY = SonarGlass.isGlass(endpoint.getLevel(),
+                        pos.above()) ? 1 : .95;
                 if (!northSouth && !eastWest) {
                     northSouth = true;
                     eastWest = true;
@@ -281,11 +316,56 @@ public final class SonarGlassOverlay {
                             new Vec3(1, maxY, .5), new Vec3(1, minY, .5)
                     }));
                 }
-            } else {
+            } else if (!addCopycatSlopeMasks(result, pos, state)) {
                 result.add(new LocalMask(pos, null));
             }
         }
         return new MaskLayout(geometryGeneration, List.copyOf(result));
+    }
+
+    /**
+     * Copycats slopes are wedges, so a cube face would project the sonar image
+     * outside the visible glass. Match the same sloped plane and rotations used
+     * by Copycats' slope model cores.
+     */
+    private static boolean addCopycatSlopeMasks(
+            List<LocalMask> output, BlockPos pos, BlockState state) {
+        var id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        if (!id.getNamespace().equals("copycats")) return false;
+        String path = id.getPath();
+        if (!path.equals("copycat_slope")
+                && !path.equals("copycat_vertical_slope")) return false;
+
+        Direction facing = state.getOptionalValue(
+                BlockStateProperties.HORIZONTAL_FACING).orElse(Direction.NORTH);
+        int rotation = Math.round(facing.toYRot());
+        Vec3[] corners = {
+                new Vec3(0, 0, 0),
+                new Vec3(1, 0, 0),
+                new Vec3(1, 1, 1),
+                new Vec3(0, 1, 1)
+        };
+        boolean vertical = path.equals("copycat_vertical_slope");
+        boolean flipY = !vertical && state.getOptionalValue(
+                BlockStateProperties.HALF).orElse(Half.BOTTOM) == Half.TOP;
+        for (int i = 0; i < corners.length; i++) {
+            Vec3 point = corners[i];
+            if (flipY) point = new Vec3(point.x, 1 - point.y, point.z);
+            if (vertical) point = new Vec3(1 - point.y, point.x, point.z);
+            corners[i] = rotateCopycatY(point, rotation);
+        }
+        output.add(new LocalMask(pos, corners));
+        return true;
+    }
+
+    private static Vec3 rotateCopycatY(Vec3 point, int rotation) {
+        int normalized = Math.floorMod(rotation, 360);
+        return switch (normalized) {
+            case 90 -> new Vec3(1 - point.z, point.y, point.x);
+            case 180 -> new Vec3(1 - point.x, point.y, 1 - point.z);
+            case 270 -> new Vec3(point.z, point.y, 1 - point.x);
+            default -> point;
+        };
     }
 
     private static DepthAperture depthAperture(SonarGlassBlockEntity endpoint) {
@@ -306,8 +386,8 @@ public final class SonarGlassOverlay {
                 continue;
             }
             for (Direction direction : Direction.values()) {
-                if (SonarGlass.isGlass(endpoint.getLevel().getBlockState(
-                        mask.pos.relative(direction)))) continue;
+                if (SonarGlass.isGlass(endpoint.getLevel(),
+                        mask.pos.relative(direction))) continue;
                 addLocalApertureQuad(buffer, localBase, mask.pos,
                         connectedFaceQuad(endpoint.getLevel(), mask.pos,
                                 direction, .07), false);
@@ -394,12 +474,12 @@ public final class SonarGlassOverlay {
     private static Vec3[] connectedFaceQuad(
             net.minecraft.world.level.Level level, BlockPos pos,
             Direction face, double inset) {
-        boolean west = SonarGlass.isGlass(level.getBlockState(pos.west()));
-        boolean east = SonarGlass.isGlass(level.getBlockState(pos.east()));
-        boolean down = SonarGlass.isGlass(level.getBlockState(pos.below()));
-        boolean up = SonarGlass.isGlass(level.getBlockState(pos.above()));
-        boolean north = SonarGlass.isGlass(level.getBlockState(pos.north()));
-        boolean south = SonarGlass.isGlass(level.getBlockState(pos.south()));
+        boolean west = SonarGlass.isGlass(level, pos.west());
+        boolean east = SonarGlass.isGlass(level, pos.east());
+        boolean down = SonarGlass.isGlass(level, pos.below());
+        boolean up = SonarGlass.isGlass(level, pos.above());
+        boolean north = SonarGlass.isGlass(level, pos.north());
+        boolean south = SonarGlass.isGlass(level, pos.south());
 
         double minX = west ? 0 : inset;
         double maxX = east ? 1 : 1 - inset;
@@ -472,7 +552,7 @@ public final class SonarGlassOverlay {
             float age = now - entry.getValue();
             if (age < 0 || age > SonarGlassAnimation.PULSE_TICKS) continue;
             BlockPos anchor = BlockPos.of(entry.getKey());
-            if (!SonarGlass.isGlass(minecraft.level.getBlockState(anchor))) continue;
+            if (!SonarGlass.isGlass(minecraft.level, anchor)) continue;
             float alpha = (float) Math.sin(
                     Math.PI * age / SonarGlassAnimation.PULSE_TICKS) * .85f;
             for (MaskQuad mask : maskQuadsAt(anchor)) {
@@ -490,9 +570,19 @@ public final class SonarGlassOverlay {
     private static List<MaskQuad> maskQuadsAt(BlockPos anchor) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null
-                || !(minecraft.level.getBlockEntity(anchor)
-                instanceof SonarGlassBlockEntity blockEntity)) return List.of();
-        return maskQuads(blockEntity);
+                || !SonarGlass.isGlass(minecraft.level, anchor)) return List.of();
+        if (minecraft.level.getBlockEntity(anchor)
+                instanceof SonarGlassBlockEntity blockEntity) {
+            return maskQuads(blockEntity);
+        }
+        for (BlockPos pos : SonarGlassNetwork.find(
+                minecraft.level, anchor).blocks()) {
+            if (minecraft.level.getBlockEntity(pos)
+                    instanceof SonarGlassBlockEntity blockEntity) {
+                return maskQuads(blockEntity);
+            }
+        }
+        return List.of();
     }
 
     private static void drawWorld(PoseStack poseStack, List<WorldLine> lines) {
