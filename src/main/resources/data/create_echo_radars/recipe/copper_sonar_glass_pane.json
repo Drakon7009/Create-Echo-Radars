@@ -1,0 +1,7 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": ["GGG", "GGG"],
+  "key": { "G": { "item": "create_echo_radars:copper_sonar_glass" } },
+  "result": { "id": "create_echo_radars:copper_sonar_glass_pane", "count": 16 }
+}

@@ -1,0 +1,4 @@
+{
+  "vertex": "create_echo_radars:sonar_glass_depth",
+  "fragment": "create_echo_radars:sonar_glass_depth"
+}

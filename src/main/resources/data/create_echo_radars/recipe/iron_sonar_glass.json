@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": ["GGG", "GEG", "GIG"],
+  "key": {
+    "G": { "item": "minecraft:glass" },
+    "E": { "item": "create:electron_tube" },
+    "I": { "item": "create:industrial_iron_block" }
+  },
+  "result": { "id": "create_echo_radars:iron_sonar_glass", "count": 8 }
+}

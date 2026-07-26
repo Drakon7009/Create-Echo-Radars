@@ -4,7 +4,8 @@ import net.minecraft.nbt.CompoundTag;
 
 public record SonarReturn(int beam, int rangeBin, float bearingDegrees,
                           float elevationDegrees, float normalizedDistance, float intensity,
-                          float angularResolutionDegrees, float verticalAngularResolutionDegrees) {
+                          float angularResolutionDegrees,
+                          float verticalAngularResolutionDegrees) {
     public SonarReturn(int beam, int rangeBin, float bearingDegrees,
                        float normalizedDistance, float intensity) {
         this(beam, rangeBin, bearingDegrees, 0, normalizedDistance, intensity, 0, 0);
