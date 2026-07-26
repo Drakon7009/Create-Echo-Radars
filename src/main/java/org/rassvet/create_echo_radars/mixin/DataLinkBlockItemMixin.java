@@ -39,7 +39,7 @@ public abstract class DataLinkBlockItemMixin {
     private void createEchoRadars$attachSonarGlass(UseOnContext ctx,
                                                    CallbackInfoReturnable<InteractionResult> cir) {
         BlockPos clickedPos = ctx.getClickedPos();
-        if (!SonarGlass.isGlass(ctx.getLevel().getBlockState(clickedPos))) return;
+        if (!SonarGlass.isGlass(ctx.getLevel(), clickedPos)) return;
         if (ctx.getPlayer() == null) {
             cir.setReturnValue(InteractionResult.FAIL);
             return;

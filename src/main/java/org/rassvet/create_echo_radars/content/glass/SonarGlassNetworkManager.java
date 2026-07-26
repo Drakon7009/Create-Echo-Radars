@@ -11,6 +11,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.WeakHashMap;
+import org.jetbrains.annotations.Nullable;
 
 public final class SonarGlassNetworkManager {
     private static final Map<ServerLevel, SonarGlassNetworkManager> INSTANCES = new WeakHashMap<>();
@@ -34,8 +35,8 @@ public final class SonarGlassNetworkManager {
             }
             boolean emitterSubmerged = sonar.isEmitterSubmerged();
             for (BlockPos endpoint : group.monitorEndpoints) {
-                if (!SonarGlass.isGlass(level.getBlockState(endpoint))
-                        || !(level.getBlockEntity(endpoint) instanceof SonarGlassBlockEntity glass)) continue;
+                SonarGlassBlockEntity glass = displayEntity(level, endpoint);
+                if (glass == null) continue;
                 long endpointKey = endpoint.asLong();
                 if (!emitterSubmerged) {
                     states.remove(endpointKey);
@@ -44,6 +45,7 @@ public final class SonarGlassNetworkManager {
                 }
                 active.add(endpointKey);
                 State state = states.computeIfAbsent(endpointKey, ignored -> new State(now));
+                state.displayPos = glass.getBlockPos().immutable();
                 if (state.disconnecting) {
                     state.disconnecting = false;
                     state.nextCycle = now;
@@ -59,12 +61,13 @@ public final class SonarGlassNetworkManager {
         while (iterator.hasNext()) {
             Map.Entry<Long, State> entry = iterator.next();
             if (active.contains(entry.getKey())) continue;
-            BlockPos pos = BlockPos.of(entry.getKey());
-            if (!(level.getBlockEntity(pos) instanceof SonarGlassBlockEntity glass)) {
+            State state = entry.getValue();
+            BlockPos displayPos = state.displayPos == null
+                    ? BlockPos.of(entry.getKey()) : state.displayPos;
+            if (!(level.getBlockEntity(displayPos) instanceof SonarGlassBlockEntity glass)) {
                 iterator.remove();
                 continue;
             }
-            State state = entry.getValue();
             if (!state.disconnecting) {
                 state.disconnecting = true;
                 state.disconnectStart = now;
@@ -80,10 +83,26 @@ public final class SonarGlassNetworkManager {
         states.put(endpoint.asLong(), new State(now));
     }
 
+    private static @Nullable SonarGlassBlockEntity displayEntity(
+            ServerLevel level, BlockPos endpoint) {
+        if (!SonarGlass.isGlass(level, endpoint)) return null;
+        if (level.getBlockEntity(endpoint) instanceof SonarGlassBlockEntity glass) {
+            return glass;
+        }
+        SonarGlassNetwork.Component component = SonarGlassNetwork.find(level, endpoint);
+        for (BlockPos pos : component.blocks()) {
+            if (level.getBlockEntity(pos) instanceof SonarGlassBlockEntity glass) {
+                return glass;
+            }
+        }
+        return null;
+    }
+
     private static final class State {
         private long nextCycle;
         private long disconnectStart;
         private boolean disconnecting;
+        private BlockPos displayPos;
 
         private State(long nextCycle) { this.nextCycle = nextCycle; }
     }
