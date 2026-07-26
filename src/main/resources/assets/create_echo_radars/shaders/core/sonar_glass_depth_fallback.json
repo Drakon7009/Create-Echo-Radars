@@ -1,0 +1,35 @@
+{
+  "vertex": "create_echo_radars:sonar_glass_depth_fallback",
+  "fragment": "create_echo_radars:sonar_glass_depth_fallback",
+  "samplers": [
+    { "name": "DepthSampler" },
+    { "name": "CutoutDepthSampler" },
+    { "name": "SceneDepthSampler" }
+  ],
+  "uniforms": [
+    { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+    { "name": "ProjMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+    { "name": "InverseViewProjection", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
+    { "name": "CameraPosition", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+    { "name": "MinRenderDistance", "type": "float", "count": 1, "values": [ 8.0 ] },
+    { "name": "ScreenSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
+    { "name": "CycleAge", "type": "float", "count": 1, "values": [ 0.0 ] },
+    { "name": "Disconnect", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "CurrentOrigin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+    { "name": "CurrentForward", "type": "float", "count": 3, "values": [ 0.0, 0.0, -1.0 ] },
+    { "name": "CurrentRight", "type": "float", "count": 3, "values": [ 1.0, 0.0, 0.0 ] },
+    { "name": "CurrentUp", "type": "float", "count": 3, "values": [ 0.0, 1.0, 0.0 ] },
+    { "name": "CurrentRange", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "CurrentHorizontalSector", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "CurrentVerticalSector", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "CurrentType", "type": "int", "count": 1, "values": [ 0 ] },
+    { "name": "PreviousOrigin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+    { "name": "PreviousForward", "type": "float", "count": 3, "values": [ 0.0, 0.0, -1.0 ] },
+    { "name": "PreviousRight", "type": "float", "count": 3, "values": [ 1.0, 0.0, 0.0 ] },
+    { "name": "PreviousUp", "type": "float", "count": 3, "values": [ 0.0, 1.0, 0.0 ] },
+    { "name": "PreviousRange", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "PreviousHorizontalSector", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "PreviousVerticalSector", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "PreviousType", "type": "int", "count": 1, "values": [ 0 ] }
+  ]
+}

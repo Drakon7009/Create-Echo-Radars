@@ -984,7 +984,8 @@ public final class SonarScanManager {
         private float verticalAngularResolution = Float.MAX_VALUE;
 
         void add(float intensity, float normalizedDistance, float bearing,
-                 float elevation, float angularResolution, float verticalAngularResolution) {
+                 float elevation, float angularResolution,
+                 float verticalAngularResolution) {
             sum += intensity;
             distanceSum += normalizedDistance;
             bearingSum += bearing;

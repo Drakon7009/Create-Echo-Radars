@@ -1,6 +1,7 @@
 package org.rassvet.create_echo_radars.content.sonar;
 
 import com.happysg.radar.block.behavior.networks.INetworkNode;
+import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.radar.behavior.IRadar;
 import com.happysg.radar.block.radar.behavior.RadarScanningBlockBehavior;
 import com.happysg.radar.block.radar.track.RadarTrack;
@@ -15,6 +16,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.tags.FluidTags;
 import net.minecraft.util.Mth;
 import net.minecraft.world.MenuProvider;
@@ -62,9 +64,11 @@ public class SonarBlockEntity extends KineticBlockEntity
     private boolean autoHeight = true;
     private float mechanicalAngle;
     private float previousMechanicalAngle;
+    private BlockPos lastKnownNetworkPos;
 
     public SonarBlockEntity(BlockPos pos, BlockState state) {
         super(org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_BLOCK_ENTITY.get(), pos, state);
+        lastKnownNetworkPos = pos.immutable();
         SonarType type = sonarType(state);
         horizontalSector = type.defaultHorizontalAngle();
         verticalSector = type.defaultVerticalAngle();
@@ -83,6 +87,11 @@ public class SonarBlockEntity extends KineticBlockEntity
     public void tick() {
         super.tick();
         if (level == null) return;
+
+        if (!level.isClientSide && level instanceof ServerLevel serverLevel
+                && level.getGameTime() % 20 == 0) {
+            updateNetworkPosition(serverLevel);
+        }
 
         previousMechanicalAngle = mechanicalAngle;
         float mechanicalSpeed = 0;
@@ -109,6 +118,21 @@ public class SonarBlockEntity extends KineticBlockEntity
             }
         }
         SonarScanManager.get((net.minecraft.server.level.ServerLevel) level).touch(this);
+    }
+
+    @Override
+    public void initialize() {
+        super.initialize();
+        if (level instanceof ServerLevel serverLevel) updateNetworkPosition(serverLevel);
+    }
+
+    private void updateNetworkPosition(ServerLevel serverLevel) {
+        if (lastKnownNetworkPos.equals(worldPosition)) return;
+        if (NetworkData.get(serverLevel).updateRadarPosition(serverLevel.dimension(),
+                lastKnownNetworkPos, worldPosition)) {
+            lastKnownNetworkPos = worldPosition.immutable();
+            setChanged();
+        }
     }
 
     void scanEntitiesAtScanStart(Vec3 origin, SonarOrientation orientation,
@@ -427,6 +451,7 @@ public class SonarBlockEntity extends KineticBlockEntity
         tag.putInt("TiltAngle", tiltAngle);
         tag.putBoolean("AutoHeight", autoHeight);
         tag.putFloat("MechanicalAngle", mechanicalAngle);
+        tag.putLong("LastKnownNetworkPos", lastKnownNetworkPos.asLong());
     }
 
     @Override
@@ -442,6 +467,9 @@ public class SonarBlockEntity extends KineticBlockEntity
         autoHeight = !tag.contains("AutoHeight") || tag.getBoolean("AutoHeight");
         mechanicalAngle = SonarRotation.wrap(tag.getFloat("MechanicalAngle"));
         previousMechanicalAngle = mechanicalAngle;
+        if (tag.contains("LastKnownNetworkPos")) {
+            lastKnownNetworkPos = BlockPos.of(tag.getLong("LastKnownNetworkPos"));
+        }
     }
 
     @Override

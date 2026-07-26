@@ -62,6 +62,11 @@ public final class SonarConfigScreen {
                         () -> values.gain, value -> values.gain = value, 0.1, 2.0, 0.05))
                         .option(doubleOption("config.create_echo_radars.speckle", 0.35,
                         () -> values.speckle, value -> values.speckle = value, 0.0, 1.0, 0.05))
+                        .option(doubleOption(
+                                "config.create_echo_radars.sonar_glass_minimum_distance", 8.0,
+                                () -> values.sonarGlassMinimumDistance,
+                                value -> values.sonarGlassMinimumDistance = value,
+                                0.0, 32.0, 1.0))
                         .option(booleanOption("config.create_echo_radars.point_gaps", false,
                         () -> values.pointGaps, value -> values.pointGaps = value))
                         .option(booleanOption("config.create_echo_radars.block_sized_pixels", false,
@@ -239,7 +244,8 @@ public final class SonarConfigScreen {
     }
 
     private static void save(Values values, boolean operatorAllowed) {
-        ClientConfig.save(values.palette, values.gain, values.speckle, values.pointGaps,
+        ClientConfig.save(values.palette, values.gain, values.speckle,
+                values.sonarGlassMinimumDistance, values.pointGaps,
                 values.blockSizedPixels,
                 values.oldPixelLifetimeTicks, values.mechanicalPixelLifetimeTicks,
                 values.clearOldPixelsWhenRefreshed, values.sideScanDataPosition);
@@ -258,6 +264,8 @@ public final class SonarConfigScreen {
         private SonarPalette palette = ClientConfig.palette();
         private double gain = ClientConfig.gain();
         private double speckle = ClientConfig.speckle();
+        private double sonarGlassMinimumDistance =
+                ClientConfig.sonarGlassMinimumDistance();
         private boolean pointGaps = ClientConfig.pointGaps();
         private boolean blockSizedPixels = ClientConfig.blockSizedPixels();
         private int oldPixelLifetimeTicks = ClientConfig.oldPixelLifetimeTicks();

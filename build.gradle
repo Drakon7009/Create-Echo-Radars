@@ -137,6 +137,10 @@ dependencies {
     compileOnly("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}")
     compileOnly("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}")
     runtimeOnly("dev.ryanhcode.sable:sable-neoforge-${minecraft_version}:${sable_version}")
+    compileOnly("foundry.veil:veil-neoforge-${minecraft_version}:${veil_version}") {
+        transitive = false
+    }
+    compileOnly("maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge")
 
     implementation("maven.modrinth:yacl:${yacl_version}")
 

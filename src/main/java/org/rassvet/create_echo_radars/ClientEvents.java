@@ -11,6 +11,8 @@ import net.neoforged.neoforge.common.NeoForge;
 import org.rassvet.create_echo_radars.client.SonarDebugRenderer;
 import org.rassvet.create_echo_radars.client.SonarScreen;
 import org.rassvet.create_echo_radars.client.MechanicalSonarRenderer;
+import org.rassvet.create_echo_radars.client.SonarGlassOverlay;
+import org.rassvet.create_echo_radars.client.SonarGlassVanillaDepthRenderer;
 
 public final class ClientEvents {
     private ClientEvents() {}
@@ -22,8 +24,10 @@ public final class ClientEvents {
                             org.rassvet.create_echo_radars.client.SonarConfigScreen.create(parent));
             modBus.addListener(ClientEvents::registerScreens);
             modBus.addListener(ClientEvents::registerRenderers);
+            modBus.addListener(SonarGlassVanillaDepthRenderer::registerShader);
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRightClickBlock);
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRenderLevel);
+            NeoForge.EVENT_BUS.addListener(SonarGlassOverlay::onRenderLevel);
         }
     }
 

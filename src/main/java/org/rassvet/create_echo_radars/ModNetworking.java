@@ -27,7 +27,9 @@ public final class ModNetworking {
                 .playToServer(UpdateServerConfigPayload.TYPE,
                         UpdateServerConfigPayload.STREAM_CODEC, UpdateServerConfigPayload::handle)
                 .playToClient(ServerConfigSnapshotPayload.TYPE,
-                        ServerConfigSnapshotPayload.STREAM_CODEC, ServerConfigSnapshotPayload::handle);
+                        ServerConfigSnapshotPayload.STREAM_CODEC, ServerConfigSnapshotPayload::handle)
+                .playToClient(SonarGlassPulsePayload.TYPE,
+                        SonarGlassPulsePayload.STREAM_CODEC, SonarGlassPulsePayload::handle);
     }
 
     public static void sendSettings(BlockPos pos, int range, int horizontalSector,
@@ -57,6 +59,36 @@ public final class ModNetworking {
 
     public static void syncServerConfigToAllPlayers() {
         PacketDistributor.sendToAllPlayers(ServerConfigSnapshotPayload.fromServerConfig());
+    }
+
+    public static void sendGlassPulse(net.minecraft.server.level.ServerLevel level,
+                                      BlockPos anchor, long serverTick) {
+        PacketDistributor.sendToPlayersTrackingChunk(level, new net.minecraft.world.level.ChunkPos(anchor),
+                new SonarGlassPulsePayload(anchor, serverTick));
+    }
+
+    public record SonarGlassPulsePayload(BlockPos anchor, long serverTick) implements CustomPacketPayload {
+        public static final Type<SonarGlassPulsePayload> TYPE = new Type<>(
+                ResourceLocation.fromNamespaceAndPath(CreateEchoRadars.MOD_ID, "sonar_glass_pulse"));
+        public static final StreamCodec<RegistryFriendlyByteBuf, SonarGlassPulsePayload> STREAM_CODEC =
+                StreamCodec.ofMember(SonarGlassPulsePayload::encode, SonarGlassPulsePayload::decode);
+
+        private void encode(RegistryFriendlyByteBuf buffer) {
+            buffer.writeBlockPos(anchor);
+            buffer.writeLong(serverTick);
+        }
+
+        private static SonarGlassPulsePayload decode(RegistryFriendlyByteBuf buffer) {
+            return new SonarGlassPulsePayload(buffer.readBlockPos(), buffer.readLong());
+        }
+
+        private static void handle(SonarGlassPulsePayload payload, IPayloadContext context) {
+            context.enqueueWork(() -> org.rassvet.create_echo_radars.client.SonarGlassOverlay
+                    .pulse(payload.anchor, payload.serverTick));
+        }
+
+        @Override
+        public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
     public record UpdateSonarSettingsPayload(BlockPos pos, int range, int horizontalSector,

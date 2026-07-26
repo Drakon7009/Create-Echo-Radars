@@ -4,13 +4,16 @@
   "package": "org.rassvet.create_echo_radars.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "DeepSeasHullStrengthConfigMixin",
     "DataLinkBlockItemMixin",
     "MonitorBlockEntityMixin",
     "MonitorInputHandlerMixin"
   ],
   "client": [
     "MonitorBlockClientMixin",
-    "MonitorRendererMixin"
+    "MonitorRendererMixin",
+    "SodiumSonarFogOcclusionMixin",
+    "SodiumSonarOpaqueDepthMixin"
   ],
   "injectors": {
     "defaultRequire": 1

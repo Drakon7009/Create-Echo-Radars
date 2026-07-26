@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "building",
+  "pattern": ["GGG", "GEG", "GCG"],
+  "key": {
+    "G": { "item": "minecraft:glass" },
+    "E": { "item": "create:electron_tube" },
+    "C": { "item": "minecraft:copper_block" }
+  },
+  "result": { "id": "create_echo_radars:copper_sonar_glass", "count": 8 }
+}
