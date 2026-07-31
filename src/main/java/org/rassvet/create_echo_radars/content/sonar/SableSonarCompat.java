@@ -5,6 +5,7 @@ import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.SectionPos;
+import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -38,6 +39,20 @@ public final class SableSonarCompat {
                     horizontalSector, verticalSector, rays);
         } catch (LinkageError | RuntimeException error) {
             return Snapshot.EMPTY;
+        }
+    }
+
+    /**
+     * Prevents Sable's projected block raycast from treating the tracked
+     * construction itself as a wall. This is only applied to visibility rays
+     * for Sable tracks; ordinary entity occlusion still checks every sublevel.
+     */
+    public static void ignoreTrackedSubLevel(ClipContext context, String trackId) {
+        if (!ModList.get().isLoaded(SABLE_MOD_ID)) return;
+        try {
+            LoadedSable.ignoreTrackedSubLevel(context, trackId);
+        } catch (LinkageError | RuntimeException ignored) {
+            // Sable is optional. Fall back to the normal raycast if its API is unavailable.
         }
     }
 
@@ -78,6 +93,14 @@ public final class SableSonarCompat {
 
     private static final class LoadedSable {
         private LoadedSable() {}
+
+        private static void ignoreTrackedSubLevel(ClipContext context, String trackId) {
+            if (!(context instanceof dev.ryanhcode.sable.mixinterface.clip_overwrite.ClipContextExtension extension)) {
+                return;
+            }
+            extension.sable$setSubLevelIgnoring(subLevel ->
+                    subLevel.getUniqueId().toString().equals(trackId));
+        }
 
         private static Snapshot captureLoadedSubLevels(Level level, Vec3 origin, SonarOrientation orientation,
                                                        int range, int horizontalSector, int verticalSector,
