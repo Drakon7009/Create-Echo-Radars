@@ -12,6 +12,7 @@
   "client": [
     "MonitorBlockClientMixin",
     "MonitorRendererMixin",
+    "FusionConnectingTextureMixin",
     "SodiumSonarFogOcclusionMixin",
     "SodiumSonarOpaqueDepthMixin"
   ],

@@ -1,0 +1,7 @@
+{
+  "parent": "create_echo_radars:block/sonar_glass_filter_cube",
+  "render_type": "minecraft:translucent",
+  "textures": {
+    "all": "create_echo_radars:block/sonar_glass_filter"
+  }
+}

@@ -4,6 +4,7 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.ModContainer;
+import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
@@ -13,12 +14,16 @@ import org.rassvet.create_echo_radars.client.SonarScreen;
 import org.rassvet.create_echo_radars.client.MechanicalSonarRenderer;
 import org.rassvet.create_echo_radars.client.SonarGlassOverlay;
 import org.rassvet.create_echo_radars.client.SonarGlassVanillaDepthRenderer;
+import org.rassvet.create_echo_radars.compat.fusion.SonarSlopeFrameConnectionPredicate;
 
 public final class ClientEvents {
     private ClientEvents() {}
 
     public static void register(IEventBus modBus, ModContainer container) {
         if (FMLEnvironment.dist == Dist.CLIENT) {
+            if (ModList.get().isLoaded("fusion")) {
+                SonarSlopeFrameConnectionPredicate.register();
+            }
             container.registerExtensionPoint(IConfigScreenFactory.class,
                     (IConfigScreenFactory) (ignored, parent) ->
                             org.rassvet.create_echo_radars.client.SonarConfigScreen.create(parent));
