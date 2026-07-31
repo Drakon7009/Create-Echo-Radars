@@ -306,7 +306,7 @@ public class SonarBlockEntity extends KineticBlockEntity
                 .filter(track -> !autoHeight
                         || Math.abs(SonarMath.project(track.position().subtract(origin), orientation).up())
                         <= displayYRange())
-                .filter(track -> isEntityVisible(track.id(), origin, track.position()));
+                .filter(track -> isSableTrackVisible(track.id(), origin, track.position()));
         return java.util.stream.Stream.concat(entityTracks.values().stream(), sableTracks)
                 .collect(java.util.stream.Collectors.toMap(RadarTrack::id, track -> track,
                         (first, second) -> first))
@@ -331,17 +331,32 @@ public class SonarBlockEntity extends KineticBlockEntity
     }
 
     private boolean isEntityVisible(String entityId, Vec3 origin, Vec3 target) {
+        return isTrackVisible(entityId, origin, target, false);
+    }
+
+    private boolean isSableTrackVisible(String trackId, Vec3 origin, Vec3 target) {
+        return isTrackVisible(trackId, origin, target, true);
+    }
+
+    private boolean isTrackVisible(String trackId, Vec3 origin, Vec3 target,
+                                   boolean ignoreTrackedSableConstruction) {
         if (level == null) return false;
         if (level.isClientSide || !ServerConfig.entityOcclusionCheck()) return true;
         BlockPos sonarCell = BlockPos.containing(origin);
         BlockPos entityCell = BlockPos.containing(target);
-        return entityVisibilityCache.resolve(entityId, visibilityCell(sonarCell), visibilityCell(entityCell),
-                level.getGameTime(), () -> hasClearEntityRay(target, origin));
+        return entityVisibilityCache.resolve(trackId, visibilityCell(sonarCell), visibilityCell(entityCell),
+                level.getGameTime(), () -> hasClearEntityRay(target, origin,
+                        ignoreTrackedSableConstruction ? trackId : null));
     }
 
-    private boolean hasClearEntityRay(Vec3 entityPosition, Vec3 sonarPosition) {
-        BlockHitResult hit = level.clip(new ClipContext(entityPosition, sonarPosition,
-                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty()));
+    private boolean hasClearEntityRay(Vec3 entityPosition, Vec3 sonarPosition,
+                                      @Nullable String ignoredSableTrackId) {
+        ClipContext context = new ClipContext(entityPosition, sonarPosition,
+                ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty());
+        if (ignoredSableTrackId != null) {
+            SableSonarCompat.ignoreTrackedSubLevel(context, ignoredSableTrackId);
+        }
+        BlockHitResult hit = level.clip(context);
         return hit.getType() == HitResult.Type.MISS;
     }
 
