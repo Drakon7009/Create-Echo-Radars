@@ -8,6 +8,7 @@ public final class ClientConfig {
     private static final ModConfigSpec.DoubleValue GAIN;
     private static final ModConfigSpec.DoubleValue SPECKLE;
     private static final ModConfigSpec.DoubleValue SONAR_GLASS_MINIMUM_DISTANCE;
+    private static final ModConfigSpec.IntValue SONAR_GLASS_ACTIVATION_DISTANCE;
     private static final ModConfigSpec.BooleanValue POINT_GAPS;
     private static final ModConfigSpec.BooleanValue BLOCK_SIZED_PIXELS;
     private static final ModConfigSpec.IntValue OLD_PIXEL_LIFETIME_TICKS;
@@ -30,6 +31,9 @@ public final class ClientConfig {
         SONAR_GLASS_MINIMUM_DISTANCE = builder
                 .comment("Minimum distance in blocks from the camera at which the sonar-glass grid can be rendered.")
                 .defineInRange("sonarGlass.minimumRenderDistance", 8.0, 0.0, 32.0);
+        SONAR_GLASS_ACTIVATION_DISTANCE = builder
+                .comment("Maximum distance in blocks from the camera to connected sonar glass at which its display is active.")
+                .defineInRange("sonarGlass.activationDistance", 10, 1, 128);
         POINT_GAPS = builder
                 .comment("Leave a visible gap between adjacent sonar return cells.")
                 .define("monitor.pointGaps", false);
@@ -76,6 +80,10 @@ public final class ClientConfig {
         return SONAR_GLASS_MINIMUM_DISTANCE.get().floatValue();
     }
 
+    public static int sonarGlassActivationDistance() {
+        return SONAR_GLASS_ACTIVATION_DISTANCE.get();
+    }
+
     public static boolean pointGaps() {
         return POINT_GAPS.get();
     }
@@ -105,7 +113,8 @@ public final class ClientConfig {
     }
 
     public static void save(SonarPalette palette, double gain, double speckle,
-                            double sonarGlassMinimumDistance, boolean pointGaps,
+                            double sonarGlassMinimumDistance,
+                            int sonarGlassActivationDistance, boolean pointGaps,
                             boolean blockSizedPixels,
                             int oldPixelLifetimeTicks, int mechanicalPixelLifetimeTicks,
                             boolean clearOldPixelsWhenRefreshed,
@@ -115,6 +124,8 @@ public final class ClientConfig {
         SPECKLE.set(speckle);
         SONAR_GLASS_MINIMUM_DISTANCE.set(Math.max(0.0,
                 Math.min(32.0, sonarGlassMinimumDistance)));
+        SONAR_GLASS_ACTIVATION_DISTANCE.set(Math.max(1,
+                Math.min(128, sonarGlassActivationDistance)));
         POINT_GAPS.set(pointGaps);
         BLOCK_SIZED_PIXELS.set(blockSizedPixels);
         OLD_PIXEL_LIFETIME_TICKS.set(Math.max(-1, Math.min(200, oldPixelLifetimeTicks)));

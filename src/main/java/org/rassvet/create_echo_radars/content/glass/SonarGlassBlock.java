@@ -1,6 +1,8 @@
 package org.rassvet.create_echo_radars.content.glass;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.TransparentBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -15,6 +17,25 @@ import net.minecraft.world.level.block.state.BlockState;
 public final class SonarGlassBlock extends TransparentBlock implements EntityBlock, SonarGlass {
     public SonarGlassBlock(BlockBehaviour.Properties properties) {
         super(properties);
+    }
+
+    /**
+     * Allows transparent Copycats shapes to discard their internal face when
+     * it is fully covered by a native block of the same sonar-glass material.
+     * Without external face hiding the decorative white filter remains visible
+     * through the neighboring glass and makes the Copycat look disconnected.
+     */
+    @Override
+    public boolean supportsExternalFaceHiding(BlockState state) {
+        return true;
+    }
+
+    @Override
+    public boolean hidesNeighborFace(BlockGetter level, BlockPos pos,
+                                     BlockState state,
+                                     BlockState neighborState,
+                                     Direction direction) {
+        return state.getBlock() == neighborState.getBlock();
     }
 
     @Override

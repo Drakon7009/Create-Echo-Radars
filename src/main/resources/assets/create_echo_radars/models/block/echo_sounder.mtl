@@ -1,0 +1,3 @@
+# Converted from Blockbench for Create Echo Radars
+newmtl texture
+map_Kd create_echo_radars:block/echo_sounder_model

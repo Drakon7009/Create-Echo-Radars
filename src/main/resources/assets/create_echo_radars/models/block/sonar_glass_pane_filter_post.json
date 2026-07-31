@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/template_glass_pane_post",
+  "render_type": "minecraft:translucent",
+  "textures": {
+    "pane": "create_echo_radars:block/sonar_glass_filter",
+    "edge": "create_echo_radars:block/sonar_glass_filter"
+  }
+}

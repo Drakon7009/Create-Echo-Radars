@@ -67,6 +67,11 @@ public final class SonarConfigScreen {
                                 () -> values.sonarGlassMinimumDistance,
                                 value -> values.sonarGlassMinimumDistance = value,
                                 0.0, 32.0, 1.0))
+                        .option(intOption(
+                                "config.create_echo_radars.sonar_glass_activation_distance", 10,
+                                () -> values.sonarGlassActivationDistance,
+                                value -> values.sonarGlassActivationDistance = value,
+                                1, 128, 1))
                         .option(booleanOption("config.create_echo_radars.point_gaps", false,
                         () -> values.pointGaps, value -> values.pointGaps = value))
                         .option(booleanOption("config.create_echo_radars.block_sized_pixels", false,
@@ -245,7 +250,8 @@ public final class SonarConfigScreen {
 
     private static void save(Values values, boolean operatorAllowed) {
         ClientConfig.save(values.palette, values.gain, values.speckle,
-                values.sonarGlassMinimumDistance, values.pointGaps,
+                values.sonarGlassMinimumDistance,
+                values.sonarGlassActivationDistance, values.pointGaps,
                 values.blockSizedPixels,
                 values.oldPixelLifetimeTicks, values.mechanicalPixelLifetimeTicks,
                 values.clearOldPixelsWhenRefreshed, values.sideScanDataPosition);
@@ -266,6 +272,8 @@ public final class SonarConfigScreen {
         private double speckle = ClientConfig.speckle();
         private double sonarGlassMinimumDistance =
                 ClientConfig.sonarGlassMinimumDistance();
+        private int sonarGlassActivationDistance =
+                ClientConfig.sonarGlassActivationDistance();
         private boolean pointGaps = ClientConfig.pointGaps();
         private boolean blockSizedPixels = ClientConfig.blockSizedPixels();
         private int oldPixelLifetimeTicks = ClientConfig.oldPixelLifetimeTicks();
