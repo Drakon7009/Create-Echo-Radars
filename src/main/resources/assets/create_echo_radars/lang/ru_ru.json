@@ -41,6 +41,8 @@
   "config.create_echo_radars.speckle.description": "Регулирует силу мультипликативного шума на экране.",
   "config.create_echo_radars.sonar_glass_minimum_distance": "Слепая зона гидролокационного стекла",
   "config.create_echo_radars.sonar_glass_minimum_distance.description": "Скрывает сетку на поверхностях ближе указанного расстояния от игрока в блоках.",
+  "config.create_echo_radars.sonar_glass_activation_distance": "Дальность активации гидролокационного стекла",
+  "config.create_echo_radars.sonar_glass_activation_distance.description": "Максимальное расстояние от игрока до связанного гидролокационного стекла, на котором отображается его активный эффект.",
   "config.create_echo_radars.point_gaps": "Промежутки между точками",
   "config.create_echo_radars.point_gaps.description": "Оставляет видимый промежуток между соседними ячейками отражений.",
   "config.create_echo_radars.block_sized_pixels": "Пиксель размером в один блок",

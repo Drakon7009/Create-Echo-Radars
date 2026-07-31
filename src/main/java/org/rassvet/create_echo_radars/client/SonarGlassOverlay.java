@@ -95,11 +95,8 @@ public final class SonarGlassOverlay {
 
     public static boolean hasActiveDisplay() {
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) return false;
-        for (SonarGlassBlockEntity endpoint : activeEndpoints(minecraft)) {
-            if (endpoint.currentState() != null) return true;
-        }
-        return false;
+        return minecraft.level != null && minecraft.player != null
+                && !renderableEndpoints(minecraft).isEmpty();
     }
 
     public static void onRenderLevel(RenderLevelStageEvent event) {
@@ -107,7 +104,7 @@ public final class SonarGlassOverlay {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) {
             if ((!SODIUM_LOADED || !sodiumOpaqueDepthCaptured)
                     && minecraft.level != null && minecraft.player != null
-                    && !activeEndpoints(minecraft).isEmpty()) {
+                    && hasActiveDisplay()) {
                 // This is the actual surface on which the grid is projected.
                 // The fallback also keeps the renderer alive if an unknown
                 // Sodium version moves the internal injection point.
@@ -118,7 +115,7 @@ public final class SonarGlassOverlay {
         }
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
             if (minecraft.level != null && minecraft.player != null
-                    && !activeEndpoints(minecraft).isEmpty()) {
+                    && hasActiveDisplay()) {
                 if (!SODIUM_LOADED || !sodiumWorldCutoutDepthCaptured) {
                     SonarGlassDepthCapture.captureWorldCutoutDepth();
                 }
@@ -220,13 +217,63 @@ public final class SonarGlassOverlay {
                 .toList();
     }
 
+    private static List<SonarGlassBlockEntity> renderableEndpoints(
+            Minecraft minecraft) {
+        if (minecraft.player == null) return List.of();
+        Vec3 viewer = minecraft.gameRenderer.getMainCamera().getPosition();
+        double maximumDistance = ClientConfig.sonarGlassActivationDistance();
+        return activeEndpoints(minecraft).stream()
+                .filter(endpoint -> endpoint.currentState() != null)
+                .filter(endpoint -> isWithinActivationDistance(
+                        endpoint, viewer, maximumDistance))
+                .toList();
+    }
+
+    /**
+     * Measures against every block in the connected aperture rather than the
+     * endpoint block. Large windows therefore remain active when the endpoint
+     * itself is farther away, and the local-space calculation also follows
+     * moving Sable structures.
+     */
+    private static boolean isWithinActivationDistance(
+            SonarGlassBlockEntity endpoint, Vec3 viewer,
+            double maximumDistance) {
+        MaskLayout layout = maskLayout(endpoint);
+        WorldTransform transform = worldTransform(endpoint);
+        Vec3 localViewer = transform.toLocal(viewer);
+        double maximumDistanceSquared = maximumDistance * maximumDistance;
+        if (layout.masks.isEmpty()) {
+            return distanceToBlockSquared(localViewer,
+                    endpoint.getBlockPos()) <= maximumDistanceSquared;
+        }
+        for (LocalMask mask : layout.masks) {
+            if (distanceToBlockSquared(localViewer, mask.pos)
+                    <= maximumDistanceSquared) return true;
+        }
+        return false;
+    }
+
+    private static double distanceToBlockSquared(Vec3 point, BlockPos block) {
+        double dx = axisDistance(point.x, block.getX(), block.getX() + 1);
+        double dy = axisDistance(point.y, block.getY(), block.getY() + 1);
+        double dz = axisDistance(point.z, block.getZ(), block.getZ() + 1);
+        return dx * dx + dy * dy + dz * dz;
+    }
+
+    private static double axisDistance(double value, double minimum,
+                                       double maximum) {
+        if (value < minimum) return minimum - value;
+        if (value > maximum) return value - maximum;
+        return 0;
+    }
+
     private static void renderDepthWorld(float partial) {
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null || minecraft.player == null
                 || viewProjection == null || projectionMatrix == null
                 || modelViewMatrix == null) return;
 
-        List<SonarGlassBlockEntity> endpoints = activeEndpoints(minecraft);
+        List<SonarGlassBlockEntity> endpoints = renderableEndpoints(minecraft);
         notifyFallbackIfNeeded(minecraft, !endpoints.isEmpty());
         if (endpoints.isEmpty()) return;
 
@@ -573,13 +620,17 @@ public final class SonarGlassOverlay {
                 || !SonarGlass.isGlass(minecraft.level, anchor)) return List.of();
         if (minecraft.level.getBlockEntity(anchor)
                 instanceof SonarGlassBlockEntity blockEntity) {
-            return maskQuads(blockEntity);
+            return isWithinActivationDistance(blockEntity, cameraPosition,
+                    ClientConfig.sonarGlassActivationDistance())
+                    ? maskQuads(blockEntity) : List.of();
         }
         for (BlockPos pos : SonarGlassNetwork.find(
                 minecraft.level, anchor).blocks()) {
             if (minecraft.level.getBlockEntity(pos)
                     instanceof SonarGlassBlockEntity blockEntity) {
-                return maskQuads(blockEntity);
+                return isWithinActivationDistance(blockEntity, cameraPosition,
+                        ClientConfig.sonarGlassActivationDistance())
+                        ? maskQuads(blockEntity) : List.of();
             }
         }
         return List.of();
@@ -665,6 +716,18 @@ public final class SonarGlassOverlay {
             return worldBase.add(axisX.scale(delta.x))
                     .add(axisY.scale(delta.y))
                     .add(axisZ.scale(delta.z));
+        }
+
+        private Vec3 toLocal(Vec3 world) {
+            Vec3 delta = world.subtract(worldBase);
+            return localBase.add(project(delta, axisX),
+                    project(delta, axisY), project(delta, axisZ));
+        }
+
+        private static double project(Vec3 value, Vec3 axis) {
+            double lengthSquared = axis.lengthSqr();
+            return lengthSquared < 1.0e-9 ? 0
+                    : value.dot(axis) / lengthSquared;
         }
     }
 
