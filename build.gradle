@@ -141,6 +141,9 @@ dependencies {
         transitive = false
     }
     compileOnly("maven.modrinth:sodium:mc1.21.1-0.6.13-neoforge")
+    compileOnly("maven.modrinth:p19vrgc2:${fusion_version_id}") {
+        transitive = false
+    }
 
     implementation("maven.modrinth:yacl:${yacl_version}")
 

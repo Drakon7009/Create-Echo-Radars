@@ -1,5 +1,6 @@
 {
-  "variants": {
-    "": { "model": "create_echo_radars:block/iron_sonar_glass" }
-  }
+  "multipart": [
+    { "apply": { "model": "create_echo_radars:block/iron_sonar_glass_frame" } },
+    { "apply": { "model": "create_echo_radars:block/sonar_glass_filter" } }
+  ]
 }
