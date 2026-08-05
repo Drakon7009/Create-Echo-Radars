@@ -8,12 +8,14 @@ import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.event.EntityRenderersEvent;
+import net.neoforged.neoforge.client.event.ModelEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import org.rassvet.create_echo_radars.client.SonarDebugRenderer;
 import org.rassvet.create_echo_radars.client.SonarScreen;
 import org.rassvet.create_echo_radars.client.MechanicalSonarRenderer;
 import org.rassvet.create_echo_radars.client.SonarGlassOverlay;
 import org.rassvet.create_echo_radars.client.SonarGlassVanillaDepthRenderer;
+import org.rassvet.create_echo_radars.client.SonarSignalSummatorRenderer;
 import org.rassvet.create_echo_radars.compat.fusion.SonarSlopeFrameConnectionPredicate;
 
 public final class ClientEvents {
@@ -29,6 +31,7 @@ public final class ClientEvents {
                             org.rassvet.create_echo_radars.client.SonarConfigScreen.create(parent));
             modBus.addListener(ClientEvents::registerScreens);
             modBus.addListener(ClientEvents::registerRenderers);
+            modBus.addListener(ClientEvents::registerAdditionalModels);
             modBus.addListener(SonarGlassVanillaDepthRenderer::registerShader);
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRightClickBlock);
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRenderLevel);
@@ -43,5 +46,11 @@ public final class ClientEvents {
     private static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerBlockEntityRenderer(CreateEchoRadars.SONAR_BLOCK_ENTITY.get(),
                 MechanicalSonarRenderer::new);
+        event.registerBlockEntityRenderer(CreateEchoRadars.SIGNAL_SUMMATOR_BLOCK_ENTITY.get(),
+                SonarSignalSummatorRenderer::new);
+    }
+
+    private static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
+        event.register(MechanicalSonarRenderer.ROTATING_MODEL);
     }
 }

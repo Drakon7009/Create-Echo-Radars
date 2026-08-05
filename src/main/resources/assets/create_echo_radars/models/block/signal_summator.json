@@ -1,0 +1,9 @@
+{
+  "loader": "neoforge:obj",
+  "model": "create_echo_radars:models/block/signal_summator.obj",
+  "flip_v": true,
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "create_echo_radars:block/signal_summator_texture_0"
+  }
+}

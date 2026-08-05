@@ -7,14 +7,21 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.resources.ResourceLocation;
+import net.neoforged.neoforge.client.model.data.ModelData;
 import org.rassvet.create_echo_radars.CreateEchoRadars;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlock;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 
 public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<SonarBlockEntity> {
+    public static final ModelResourceLocation ROTATING_MODEL = ModelResourceLocation.standalone(
+            ResourceLocation.fromNamespaceAndPath(CreateEchoRadars.MOD_ID,
+                    "block/mechanical_scanning_sonar_rotating"));
+
     public MechanicalSonarRenderer(BlockEntityRendererProvider.Context context) {
     }
 
@@ -22,8 +29,8 @@ public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<Sonar
     protected void renderSafe(SonarBlockEntity sonar, float partialTick, PoseStack poseStack,
                               MultiBufferSource buffers, int light, int overlay) {
         if (sonar.getSonarType() != SonarType.MECHANICAL_IMAGING_C) return;
-        BlockState headState = CreateEchoRadars.SONAR.get().defaultBlockState()
-                .setValue(SonarBlock.FACING, Direction.NORTH);
+        BakedModel rotatingModel = Minecraft.getInstance().getModelManager()
+                .getModel(ROTATING_MODEL);
         Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
         float placementAngle = switch (facing) {
             case EAST -> 90;
@@ -35,14 +42,14 @@ public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<Sonar
         poseStack.translate(0.5, 0.5, 0.5);
         poseStack.mulPose(Axis.YP.rotationDegrees(-placementAngle));
         if (sonar.isUpsideDown()) {
-            poseStack.mulPose(Axis.ZP.rotationDegrees(180));
+            poseStack.mulPose(Axis.XP.rotationDegrees(180));
         }
         poseStack.mulPose(Axis.YP.rotationDegrees(-sonar.getMechanicalAngle(partialTick)));
         poseStack.translate(-0.5, -0.5, -0.5);
-        poseStack.translate(0.18, 0.38, 0.18);
-        poseStack.scale(0.64f, 0.64f, 0.64f);
-        Minecraft.getInstance().getBlockRenderer().renderSingleBlock(
-                headState, poseStack, buffers, light, overlay);
+        Minecraft.getInstance().getBlockRenderer().getModelRenderer().renderModel(
+                poseStack.last(), buffers.getBuffer(RenderType.cutout()),
+                sonar.getBlockState(), rotatingModel, 1.0f, 1.0f, 1.0f,
+                light, overlay, ModelData.EMPTY, RenderType.cutout());
         poseStack.popPose();
     }
 

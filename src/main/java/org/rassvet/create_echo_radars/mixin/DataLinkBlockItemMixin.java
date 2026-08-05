@@ -18,6 +18,8 @@ import net.minecraft.world.InteractionResult;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
+import net.minecraft.stats.Stats;
+import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.block.Block;
@@ -27,6 +29,9 @@ import org.rassvet.create_echo_radars.ModNetworking;
 import org.rassvet.create_echo_radars.content.glass.SonarGlass;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassNetwork;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassNetworkManager;
+import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlock;
+import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockEntity;
+import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -39,6 +44,11 @@ public abstract class DataLinkBlockItemMixin {
     private void createEchoRadars$attachSonarGlass(UseOnContext ctx,
                                                    CallbackInfoReturnable<InteractionResult> cir) {
         BlockPos clickedPos = ctx.getClickedPos();
+        if (ctx.getLevel().getBlockEntity(clickedPos)
+                instanceof SonarSignalSummatorBlockEntity summator) {
+            createEchoRadars$useSummator(ctx, summator, cir);
+            return;
+        }
         if (!SonarGlass.isGlass(ctx.getLevel(), clickedPos)) return;
         if (ctx.getPlayer() == null) {
             cir.setReturnValue(InteractionResult.FAIL);
@@ -107,6 +117,92 @@ public abstract class DataLinkBlockItemMixin {
         ModNetworking.sendGlassPulse(level, clickedPos, level.getGameTime());
         ctx.getPlayer().displayClientMessage(Component.translatable("display_link.success")
                 .withStyle(ChatFormatting.GREEN), true);
+        cir.setReturnValue(InteractionResult.SUCCESS);
+    }
+
+    private static void createEchoRadars$useSummator(
+            UseOnContext ctx, SonarSignalSummatorBlockEntity summator,
+            CallbackInfoReturnable<InteractionResult> cir) {
+        if (ctx.getPlayer() == null) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        int slot = SonarSignalSummatorBlock.slotAt(summator.getBlockState(),
+                summator.getBlockPos(), new net.minecraft.world.phys.BlockHitResult(
+                        ctx.getClickLocation(), ctx.getClickedFace(),
+                        ctx.getClickedPos(), false));
+        if (slot < 0) {
+            error(ctx, "message.create_echo_radars.signal_summator.aim_at_slot");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        if (ctx.getLevel().isClientSide) {
+            cir.setReturnValue(InteractionResult.SUCCESS);
+            return;
+        }
+        if (ctx.getPlayer().isShiftKeyDown()) {
+            if (summator.removeAntenna(slot)) {
+                SonarSignalSummatorBlock.returnDataLink(ctx.getLevel(),
+                        ctx.getClickedPos(), ctx.getPlayer());
+                ctx.getPlayer().displayClientMessage(Component.translatable(
+                        "message.create_echo_radars.signal_summator.antenna_removed")
+                        .withStyle(ChatFormatting.YELLOW), true);
+            } else {
+                error(ctx, "message.create_echo_radars.signal_summator.slot_empty");
+            }
+            cir.setReturnValue(InteractionResult.SUCCESS);
+            return;
+        }
+        if (summator.hasAntenna(slot)) {
+            error(ctx, "message.create_echo_radars.signal_summator.slot_occupied");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        ItemStack stack = ctx.getItemInHand();
+        CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA,
+                CustomData.EMPTY).copyTag();
+        BlockPos filtererPos = NbtUtils.readBlockPos(tag,
+                "SelectedFiltererPos").orElse(null);
+        if (filtererPos == null || !(ctx.getLevel().getBlockEntity(filtererPos)
+                instanceof NetworkFiltererBlockEntity)) {
+            error(ctx, "message.create_echo_radars.sonar_glass.select_controller");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        ServerLevel level = (ServerLevel) ctx.getLevel();
+        NetworkData.Group group = NetworkData.get(level).getGroup(
+                level.dimension(), filtererPos);
+        if (group == null || group.radarPos == null
+                || !(level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity)) {
+            error(ctx, "message.create_echo_radars.signal_summator.controller_has_no_sonar");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        if (summator.hasFilterer(filtererPos)) {
+            error(ctx, "message.create_echo_radars.signal_summator.already_installed");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        double range = RadarConfig.server().radarLinkRange.get();
+        if (!PhysicsHandler.getWorldPos(level, ctx.getClickedPos()).getCenter().closerThan(
+                PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)) {
+            error(ctx, "display_link.too_far");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        if (!summator.installAntenna(slot, filtererPos)) {
+            error(ctx, "message.create_echo_radars.signal_summator.slot_occupied");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        ctx.getPlayer().awardStat(Stats.ITEM_USED.get(stack.getItem()));
+        level.gameEvent(ctx.getPlayer(), GameEvent.BLOCK_PLACE, ctx.getClickedPos());
+        if (!ctx.getPlayer().getAbilities().instabuild) stack.shrink(1);
+        stack.remove(DataComponents.CUSTOM_DATA);
+        ctx.getPlayer().displayClientMessage(Component.translatable(
+                "message.create_echo_radars.signal_summator.antenna_installed",
+                slot + 1).withStyle(ChatFormatting.GREEN), true);
         cir.setReturnValue(InteractionResult.SUCCESS);
     }
 

@@ -1,8 +1,6 @@
 {
   "values": [
     "create_echo_radars:copper_sonar_glass",
-    "create_echo_radars:copper_sonar_glass_pane",
-    "create_echo_radars:iron_sonar_glass",
-    "create_echo_radars:iron_sonar_glass_pane"
+    "create_echo_radars:iron_sonar_glass"
   ]
 }
