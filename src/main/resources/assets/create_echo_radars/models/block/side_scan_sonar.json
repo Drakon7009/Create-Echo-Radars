@@ -1,8 +1,9 @@
 {
-  "parent":"minecraft:block/block",
-  "textures":{"body":"create_echo_radars:block/sonar","sensor":"minecraft:block/polished_deepslate","particle":"create_echo_radars:block/sonar"},
-  "elements":[
-    {"from":[3,5,4],"to":[13,11,12],"faces":{"down":{"texture":"#body"},"up":{"texture":"#body"},"north":{"texture":"#body"},"south":{"texture":"#body"},"west":{"texture":"#body"},"east":{"texture":"#body"}}},
-    {"from":[0,6,6],"to":[16,9,10],"faces":{"down":{"texture":"#sensor"},"up":{"texture":"#sensor"},"north":{"texture":"#sensor"},"south":{"texture":"#sensor"},"west":{"texture":"#sensor"},"east":{"texture":"#sensor"}}}
-  ]
+  "loader": "neoforge:obj",
+  "model": "create_echo_radars:models/block/side_scan_sonar.obj",
+  "flip_v": true,
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "particle": "create_echo_radars:block/side_scan_sonar_texture_1"
+  }
 }

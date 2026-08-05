@@ -1,4 +1,4 @@
-# Converted from Blockbench for Create Echo Radars
+# Converted full Blockbench item model for Create Echo Radars
 newmtl texture_0
 map_Kd create_echo_radars:block/mechanical_scanning_sonar_texture_0
 newmtl texture_1

@@ -1,5 +1,0 @@
-{
-  "parent": "minecraft:block/template_glass_pane_post",
-  "render_type": "minecraft:cutout_mipped",
-  "textures": { "pane": "create_echo_radars:block/copper_sonar_glass_frame", "edge": "create_echo_radars:block/copper_sonar_glass_frame" }
-}

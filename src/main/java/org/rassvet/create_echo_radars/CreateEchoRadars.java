@@ -25,7 +25,9 @@ import org.rassvet.create_echo_radars.content.sonar.SonarMenu;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassBlock;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassBlockEntity;
-import org.rassvet.create_echo_radars.content.glass.SonarGlassPaneBlock;
+import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlock;
+import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockEntity;
+import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorItem;
 import org.slf4j.Logger;
 
 @Mod(CreateEchoRadars.MOD_ID)
@@ -50,6 +52,10 @@ public final class CreateEchoRadars {
             BLOCKS.register("mechanical_scanning_sonar", () -> new SonarBlock(SonarType.MECHANICAL_IMAGING_C));
     public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarBlock> SIDE_SCAN_SONAR =
             BLOCKS.register("side_scan_sonar", () -> new SonarBlock(SonarType.SIDE_SCAN_D));
+    public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarSignalSummatorBlock> SIGNAL_SUMMATOR =
+            BLOCKS.register("signal_summator", () -> new SonarSignalSummatorBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL)
+                            .strength(3.0f).sound(SoundType.METAL).noOcclusion()));
     private static BlockBehaviour.Properties glassProperties(MapColor mapColor) {
         return BlockBehaviour.Properties.of().mapColor(mapColor)
                 .strength(0.3f).sound(SoundType.GLASS).noOcclusion()
@@ -61,15 +67,9 @@ public final class CreateEchoRadars {
     public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarGlassBlock> COPPER_SONAR_GLASS =
             BLOCKS.register("copper_sonar_glass",
                     () -> new SonarGlassBlock(glassProperties(MapColor.COLOR_ORANGE)));
-    public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarGlassPaneBlock> COPPER_SONAR_GLASS_PANE =
-            BLOCKS.register("copper_sonar_glass_pane",
-                    () -> new SonarGlassPaneBlock(glassProperties(MapColor.COLOR_ORANGE)));
     public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarGlassBlock> IRON_SONAR_GLASS =
             BLOCKS.register("iron_sonar_glass",
                     () -> new SonarGlassBlock(glassProperties(MapColor.METAL)));
-    public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarGlassPaneBlock> IRON_SONAR_GLASS_PANE =
-            BLOCKS.register("iron_sonar_glass_pane",
-                    () -> new SonarGlassPaneBlock(glassProperties(MapColor.METAL)));
     public static final DeferredHolder<Item, BlockItem> SONAR_ITEM =
             ITEMS.register("sonar", () -> new BlockItem(SONAR.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> ECHO_SOUNDER_ITEM =
@@ -81,18 +81,15 @@ public final class CreateEchoRadars {
             ITEMS.register("side_scan_sonar", () -> new BlockItem(SIDE_SCAN_SONAR.get(), new Item.Properties()));
     public static final DeferredHolder<Item, Item> SONAR_DEBUG_TOOL =
             ITEMS.register("sonar_debug_tool", () -> new Item(new Item.Properties().stacksTo(1)));
+    public static final DeferredHolder<Item, SonarSignalSummatorItem> SIGNAL_SUMMATOR_ITEM =
+            ITEMS.register("signal_summator", () -> new SonarSignalSummatorItem(
+                    SIGNAL_SUMMATOR.get(), new Item.Properties().stacksTo(1)));
     public static final DeferredHolder<Item, BlockItem> COPPER_SONAR_GLASS_ITEM =
             ITEMS.register("copper_sonar_glass",
                     () -> new BlockItem(COPPER_SONAR_GLASS.get(), new Item.Properties()));
-    public static final DeferredHolder<Item, BlockItem> COPPER_SONAR_GLASS_PANE_ITEM =
-            ITEMS.register("copper_sonar_glass_pane",
-                    () -> new BlockItem(COPPER_SONAR_GLASS_PANE.get(), new Item.Properties()));
     public static final DeferredHolder<Item, BlockItem> IRON_SONAR_GLASS_ITEM =
             ITEMS.register("iron_sonar_glass",
                     () -> new BlockItem(IRON_SONAR_GLASS.get(), new Item.Properties()));
-    public static final DeferredHolder<Item, BlockItem> IRON_SONAR_GLASS_PANE_ITEM =
-            ITEMS.register("iron_sonar_glass_pane",
-                    () -> new BlockItem(IRON_SONAR_GLASS_PANE.get(), new Item.Properties()));
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SonarBlockEntity>> SONAR_BLOCK_ENTITY =
             BLOCK_ENTITIES.register("sonar", () ->
                     BlockEntityType.Builder.of(SonarBlockEntity::new, SONAR.get(), ECHO_SOUNDER.get(),
@@ -100,8 +97,10 @@ public final class CreateEchoRadars {
     public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SonarGlassBlockEntity>> SONAR_GLASS_BLOCK_ENTITY =
             BLOCK_ENTITIES.register("sonar_glass", () -> BlockEntityType.Builder.of(
                     SonarGlassBlockEntity::new,
-                    COPPER_SONAR_GLASS.get(), COPPER_SONAR_GLASS_PANE.get(),
-                    IRON_SONAR_GLASS.get(), IRON_SONAR_GLASS_PANE.get()).build(null));
+                    COPPER_SONAR_GLASS.get(), IRON_SONAR_GLASS.get()).build(null));
+    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<SonarSignalSummatorBlockEntity>> SIGNAL_SUMMATOR_BLOCK_ENTITY =
+            BLOCK_ENTITIES.register("signal_summator", () -> BlockEntityType.Builder.of(
+                    SonarSignalSummatorBlockEntity::new, SIGNAL_SUMMATOR.get()).build(null));
     public static final DeferredHolder<MenuType<?>, MenuType<SonarMenu>> SONAR_MENU =
             MENUS.register("sonar", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(SonarMenu::new));
     public static final DeferredHolder<CreativeModeTab, CreativeModeTab> CREATIVE_TAB =
@@ -113,10 +112,9 @@ public final class CreateEchoRadars {
                         output.accept(ECHO_SOUNDER_ITEM.get());
                         output.accept(MECHANICAL_SCANNING_SONAR_ITEM.get());
                         output.accept(SIDE_SCAN_SONAR_ITEM.get());
+                        output.accept(SIGNAL_SUMMATOR_ITEM.get());
                         output.accept(COPPER_SONAR_GLASS_ITEM.get());
-                        output.accept(COPPER_SONAR_GLASS_PANE_ITEM.get());
                         output.accept(IRON_SONAR_GLASS_ITEM.get());
-                        output.accept(IRON_SONAR_GLASS_PANE_ITEM.get());
                         output.accept(SONAR_DEBUG_TOOL.get());
                     })
                     .build());

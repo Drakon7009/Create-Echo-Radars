@@ -1,5 +1,0 @@
-{
-  "parent": "minecraft:block/template_glass_pane_noside",
-  "render_type": "minecraft:cutout_mipped",
-  "textures": { "pane": "create_echo_radars:block/iron_sonar_glass_frame", "edge": "create_echo_radars:block/iron_sonar_glass_frame" }
-}

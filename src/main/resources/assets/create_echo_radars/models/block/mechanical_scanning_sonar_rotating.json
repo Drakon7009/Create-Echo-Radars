@@ -1,6 +1,6 @@
 {
   "loader": "neoforge:obj",
-  "model": "create_echo_radars:models/block/mechanical_scanning_sonar.obj",
+  "model": "create_echo_radars:models/block/mechanical_scanning_sonar_rotating.obj",
   "flip_v": true,
   "render_type": "minecraft:cutout",
   "textures": {

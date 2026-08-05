@@ -3,6 +3,8 @@ package org.rassvet.create_echo_radars.content.glass;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.ListTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -15,8 +17,8 @@ import com.happysg.radar.block.behavior.networks.NetworkData;
 
 public final class SonarGlassBlockEntity extends BlockEntity {
     private static final String SYNC_MARKER = "SonarGlassSync";
-    private SonarGlassState currentState;
-    private SonarGlassState previousState;
+    private java.util.List<SonarGlassState> currentStates = java.util.List.of();
+    private java.util.List<SonarGlassState> previousStates = java.util.List.of();
     private long cycleStartTick;
     private long disconnectStartTick = -1;
     private BlockPos lastKnownNetworkPos;
@@ -43,14 +45,24 @@ public final class SonarGlassBlockEntity extends BlockEntity {
         }
     }
 
-    public @Nullable SonarGlassState currentState() { return currentState; }
-    public @Nullable SonarGlassState previousState() { return previousState; }
+    public @Nullable SonarGlassState currentState() {
+        return currentStates.isEmpty() ? null : currentStates.getFirst();
+    }
+    public @Nullable SonarGlassState previousState() {
+        return previousStates.isEmpty() ? null : previousStates.getFirst();
+    }
+    public java.util.List<SonarGlassState> currentStates() { return currentStates; }
+    public java.util.List<SonarGlassState> previousStates() { return previousStates; }
     public long cycleStartTick() { return cycleStartTick; }
     public long disconnectStartTick() { return disconnectStartTick; }
 
     public void acceptState(SonarGlassState state, long startTick) {
-        previousState = currentState;
-        currentState = state;
+        acceptStates(java.util.List.of(state), startTick);
+    }
+
+    public void acceptStates(java.util.List<SonarGlassState> states, long startTick) {
+        previousStates = currentStates;
+        currentStates = java.util.List.copyOf(states);
         cycleStartTick = startTick;
         disconnectStartTick = -1;
         sync();
@@ -63,10 +75,10 @@ public final class SonarGlassBlockEntity extends BlockEntity {
     }
 
     public void clearState() {
-        if (currentState == null && previousState == null
+        if (currentStates.isEmpty() && previousStates.isEmpty()
                 && disconnectStartTick < 0) return;
-        currentState = null;
-        previousState = null;
+        currentStates = java.util.List.of();
+        previousStates = java.util.List.of();
         disconnectStartTick = -1;
         sync();
     }
@@ -92,10 +104,8 @@ public final class SonarGlassBlockEntity extends BlockEntity {
             lastKnownNetworkPos = BlockPos.of(tag.getLong("LastKnownNetworkPos"));
         }
         if (!tag.getBoolean(SYNC_MARKER)) return;
-        currentState = tag.contains("CurrentState")
-                ? SonarGlassState.load(tag.getCompound("CurrentState")) : null;
-        previousState = tag.contains("PreviousState")
-                ? SonarGlassState.load(tag.getCompound("PreviousState")) : null;
+        currentStates = loadStates(tag, "CurrentStates", "CurrentState");
+        previousStates = loadStates(tag, "PreviousStates", "PreviousState");
         cycleStartTick = tag.getLong("CycleStart");
         disconnectStartTick = tag.contains("DisconnectStart") ? tag.getLong("DisconnectStart") : -1;
     }
@@ -104,11 +114,32 @@ public final class SonarGlassBlockEntity extends BlockEntity {
     public CompoundTag getUpdateTag(HolderLookup.Provider registries) {
         CompoundTag tag = new CompoundTag();
         tag.putBoolean(SYNC_MARKER, true);
-        if (currentState != null) tag.put("CurrentState", currentState.save());
-        if (previousState != null) tag.put("PreviousState", previousState.save());
+        tag.put("CurrentStates", saveStates(currentStates));
+        tag.put("PreviousStates", saveStates(previousStates));
         tag.putLong("CycleStart", cycleStartTick);
         if (disconnectStartTick >= 0) tag.putLong("DisconnectStart", disconnectStartTick);
         return tag;
+    }
+
+    private static ListTag saveStates(java.util.List<SonarGlassState> states) {
+        ListTag list = new ListTag();
+        for (SonarGlassState state : states) list.add(state.save());
+        return list;
+    }
+
+    private static java.util.List<SonarGlassState> loadStates(
+            CompoundTag tag, String listKey, String legacyKey) {
+        if (tag.contains(listKey, Tag.TAG_LIST)) {
+            ListTag list = tag.getList(listKey, Tag.TAG_COMPOUND);
+            java.util.ArrayList<SonarGlassState> states = new java.util.ArrayList<>();
+            for (int i = 0; i < list.size(); i++) {
+                states.add(SonarGlassState.load(list.getCompound(i)));
+            }
+            return java.util.List.copyOf(states);
+        }
+        return tag.contains(legacyKey, Tag.TAG_COMPOUND)
+                ? java.util.List.of(SonarGlassState.load(tag.getCompound(legacyKey)))
+                : java.util.List.of();
     }
 
     @Override
