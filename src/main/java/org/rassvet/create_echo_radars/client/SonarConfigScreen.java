@@ -72,6 +72,20 @@ public final class SonarConfigScreen {
                                 () -> values.sonarGlassActivationDistance,
                                 value -> values.sonarGlassActivationDistance = value,
                                 1, 128, 1))
+                        .option(Option.<SonarGlassGridStyle>createBuilder()
+                                .name(Component.translatable(
+                                        "config.create_echo_radars.sonar_glass_grid_style"))
+                                .description(description(
+                                        "config.create_echo_radars.sonar_glass_grid_style.description"))
+                                .binding(SonarGlassGridStyle.WAVY_LINES,
+                                        () -> values.sonarGlassGridStyle,
+                                        value -> values.sonarGlassGridStyle = value)
+                                .controller(option -> EnumControllerBuilder.create(option)
+                                        .enumClass(SonarGlassGridStyle.class)
+                                        .valueFormatter(value -> Component.translatable(
+                                                "config.create_echo_radars.sonar_glass_grid_style."
+                                                        + value.name().toLowerCase())))
+                                .build())
                         .option(booleanOption("config.create_echo_radars.point_gaps", false,
                         () -> values.pointGaps, value -> values.pointGaps = value))
                         .option(booleanOption("config.create_echo_radars.block_sized_pixels", false,
@@ -251,7 +265,8 @@ public final class SonarConfigScreen {
     private static void save(Values values, boolean operatorAllowed) {
         ClientConfig.save(values.palette, values.gain, values.speckle,
                 values.sonarGlassMinimumDistance,
-                values.sonarGlassActivationDistance, values.pointGaps,
+                values.sonarGlassActivationDistance, values.sonarGlassGridStyle,
+                values.pointGaps,
                 values.blockSizedPixels,
                 values.oldPixelLifetimeTicks, values.mechanicalPixelLifetimeTicks,
                 values.clearOldPixelsWhenRefreshed, values.sideScanDataPosition);
@@ -274,6 +289,8 @@ public final class SonarConfigScreen {
                 ClientConfig.sonarGlassMinimumDistance();
         private int sonarGlassActivationDistance =
                 ClientConfig.sonarGlassActivationDistance();
+        private SonarGlassGridStyle sonarGlassGridStyle =
+                ClientConfig.sonarGlassGridStyle();
         private boolean pointGaps = ClientConfig.pointGaps();
         private boolean blockSizedPixels = ClientConfig.blockSizedPixels();
         private int oldPixelLifetimeTicks = ClientConfig.oldPixelLifetimeTicks();
