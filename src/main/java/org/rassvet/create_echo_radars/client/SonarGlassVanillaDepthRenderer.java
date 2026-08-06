@@ -91,6 +91,7 @@ public final class SonarGlassVanillaDepthRenderer {
                 (float) camera.x, (float) camera.y, (float) camera.z);
         uniform("MinRenderDistance")
                 .set(ClientConfig.sonarGlassMinimumDistance());
+        uniform("GridStyle").set(ClientConfig.sonarGlassGridStyle().shaderId());
         uniform("ScreenSize").set((float) width, (float) height);
         uniform("CycleAge").set(draw.cycleAge());
         uniform("Disconnect").set(draw.disconnect());

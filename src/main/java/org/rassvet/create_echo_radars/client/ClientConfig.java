@@ -9,6 +9,7 @@ public final class ClientConfig {
     private static final ModConfigSpec.DoubleValue SPECKLE;
     private static final ModConfigSpec.DoubleValue SONAR_GLASS_MINIMUM_DISTANCE;
     private static final ModConfigSpec.IntValue SONAR_GLASS_ACTIVATION_DISTANCE;
+    private static final ModConfigSpec.EnumValue<SonarGlassGridStyle> SONAR_GLASS_GRID_STYLE;
     private static final ModConfigSpec.BooleanValue POINT_GAPS;
     private static final ModConfigSpec.BooleanValue BLOCK_SIZED_PIXELS;
     private static final ModConfigSpec.IntValue OLD_PIXEL_LIFETIME_TICKS;
@@ -34,6 +35,9 @@ public final class ClientConfig {
         SONAR_GLASS_ACTIVATION_DISTANCE = builder
                 .comment("Maximum distance in blocks from the camera to connected sonar glass at which its display is active.")
                 .defineInRange("sonarGlass.activationDistance", 10, 1, 128);
+        SONAR_GLASS_GRID_STYLE = builder
+                .comment("Procedural grid projected through active sonar glass.")
+                .defineEnum("sonarGlass.gridStyle", SonarGlassGridStyle.WAVY_LINES);
         POINT_GAPS = builder
                 .comment("Leave a visible gap between adjacent sonar return cells.")
                 .define("monitor.pointGaps", false);
@@ -84,6 +88,10 @@ public final class ClientConfig {
         return SONAR_GLASS_ACTIVATION_DISTANCE.get();
     }
 
+    public static SonarGlassGridStyle sonarGlassGridStyle() {
+        return SONAR_GLASS_GRID_STYLE.get();
+    }
+
     public static boolean pointGaps() {
         return POINT_GAPS.get();
     }
@@ -114,7 +122,9 @@ public final class ClientConfig {
 
     public static void save(SonarPalette palette, double gain, double speckle,
                             double sonarGlassMinimumDistance,
-                            int sonarGlassActivationDistance, boolean pointGaps,
+                            int sonarGlassActivationDistance,
+                            SonarGlassGridStyle sonarGlassGridStyle,
+                            boolean pointGaps,
                             boolean blockSizedPixels,
                             int oldPixelLifetimeTicks, int mechanicalPixelLifetimeTicks,
                             boolean clearOldPixelsWhenRefreshed,
@@ -126,6 +136,7 @@ public final class ClientConfig {
                 Math.min(32.0, sonarGlassMinimumDistance)));
         SONAR_GLASS_ACTIVATION_DISTANCE.set(Math.max(1,
                 Math.min(128, sonarGlassActivationDistance)));
+        SONAR_GLASS_GRID_STYLE.set(sonarGlassGridStyle);
         POINT_GAPS.set(pointGaps);
         BLOCK_SIZED_PIXELS.set(blockSizedPixels);
         OLD_PIXEL_LIFETIME_TICKS.set(Math.max(-1, Math.min(200, oldPixelLifetimeTicks)));

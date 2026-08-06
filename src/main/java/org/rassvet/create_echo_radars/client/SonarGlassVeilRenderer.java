@@ -85,6 +85,8 @@ final class SonarGlassVeilRenderer {
                 .setVector((float) camera.x, (float) camera.y, (float) camera.z);
         shader.getUniformSafe("MinRenderDistance")
                 .setFloat(ClientConfig.sonarGlassMinimumDistance());
+        shader.getUniformSafe("GridStyle")
+                .setInt(ClientConfig.sonarGlassGridStyle().shaderId());
         shader.getUniformSafe("ScreenSize").setVector(width, height);
         shader.getUniformSafe("CycleAge").setFloat(draw.cycleAge());
         shader.getUniformSafe("Disconnect").setFloat(draw.disconnect());

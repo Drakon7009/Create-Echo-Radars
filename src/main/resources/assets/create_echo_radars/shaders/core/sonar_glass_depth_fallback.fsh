@@ -6,6 +6,7 @@ uniform sampler2D SceneDepthSampler;
 uniform mat4 InverseViewProjection;
 uniform vec3 CameraPosition;
 uniform float MinRenderDistance;
+uniform int GridStyle;
 uniform vec2 ScreenSize;
 uniform float CycleAge;
 uniform float Disconnect;
@@ -146,6 +147,21 @@ vec2 warpGrid(vec2 position) {
 }
 
 vec2 triangleMesh(vec2 worldUv) {
+    vec2 p = worldUv / 1.85;
+    float familyA = p.x;
+    float familyB = dot(p, vec2(0.5, 0.86602540378));
+    float familyC = dot(p, vec2(-0.5, 0.86602540378));
+
+    float core = max(periodicLine(familyA, 0.012),
+                 max(periodicLine(familyB, 0.012),
+                     periodicLine(familyC, 0.012)));
+    float glow = max(periodicLine(familyA, 0.052),
+                 max(periodicLine(familyB, 0.052),
+                     periodicLine(familyC, 0.052)));
+    return vec2(core, glow);
+}
+
+vec2 wavyLines(vec2 worldUv) {
     vec2 p = warpGrid(worldUv / 1.85);
     float familyA = p.x;
     float familyB = dot(p, vec2(0.5, 0.86602540378));
@@ -158,6 +174,72 @@ vec2 triangleMesh(vec2 worldUv) {
                  max(periodicLine(familyB, 0.052),
                      periodicLine(familyC, 0.052)));
     return vec2(core, glow);
+}
+
+float segmentDistance(vec2 point, vec2 start, vec2 end) {
+    vec2 segment = end - start;
+    float along = clamp(dot(point - start, segment)
+        / max(dot(segment, segment), 0.000001), 0.0, 1.0);
+    return length(point - (start + segment * along));
+}
+
+vec2 nearestHexCenter(vec2 point, float radius) {
+    const float SQRT_THREE = 1.73205080757;
+    float q = (2.0 / 3.0 * point.x) / radius;
+    float r = (-point.x / 3.0 + SQRT_THREE * point.y / 3.0)
+        / radius;
+    float s = -q - r;
+    float roundedQ = round(q);
+    float roundedR = round(r);
+    float roundedS = round(s);
+    float qDifference = abs(roundedQ - q);
+    float rDifference = abs(roundedR - r);
+    float sDifference = abs(roundedS - s);
+    if (qDifference > rDifference && qDifference > sDifference) {
+        roundedQ = -roundedR - roundedS;
+    } else if (rDifference > sDifference) {
+        roundedR = -roundedQ - roundedS;
+    }
+    return vec2(radius * 1.5 * roundedQ,
+        radius * SQRT_THREE * (roundedR + roundedQ * 0.5));
+}
+
+vec2 isometricCubes(vec2 worldUv) {
+    const float HEX_RADIUS = 0.72;
+    const float HALF_SQRT_THREE = 0.86602540378;
+    vec2 point = worldUv / 1.85;
+    vec2 local = point - nearestHexCenter(point, HEX_RADIUS);
+    vec2 v0 = vec2(HEX_RADIUS, 0.0);
+    vec2 v1 = vec2(HEX_RADIUS * 0.5,
+        HEX_RADIUS * HALF_SQRT_THREE);
+    vec2 v2 = vec2(-HEX_RADIUS * 0.5,
+        HEX_RADIUS * HALF_SQRT_THREE);
+    vec2 v3 = vec2(-HEX_RADIUS, 0.0);
+    vec2 v4 = vec2(-HEX_RADIUS * 0.5,
+        -HEX_RADIUS * HALF_SQRT_THREE);
+    vec2 v5 = vec2(HEX_RADIUS * 0.5,
+        -HEX_RADIUS * HALF_SQRT_THREE);
+
+    float edge = segmentDistance(local, v0, v1);
+    edge = min(edge, segmentDistance(local, v1, v2));
+    edge = min(edge, segmentDistance(local, v2, v3));
+    edge = min(edge, segmentDistance(local, v3, v4));
+    edge = min(edge, segmentDistance(local, v4, v5));
+    edge = min(edge, segmentDistance(local, v5, v0));
+    edge = min(edge, segmentDistance(local, vec2(0.0), v1));
+    edge = min(edge, segmentDistance(local, vec2(0.0), v3));
+    edge = min(edge, segmentDistance(local, vec2(0.0), v5));
+
+    float antiAlias = max(fwidth(edge) * 0.85, 0.0005);
+    float core = 1.0 - smoothstep(0.012, 0.012 + antiAlias, edge);
+    float glow = 1.0 - smoothstep(0.052, 0.052 + antiAlias, edge);
+    return vec2(core, glow);
+}
+
+vec2 gridPattern(vec2 worldUv) {
+    if (GridStyle == 0) return triangleMesh(worldUv);
+    if (GridStyle == 2) return isometricCubes(worldUv);
+    return wavyLines(worldUv);
 }
 
 void main() {
@@ -187,7 +269,7 @@ void main() {
     vec3 dx = dFdx(worldPosition);
     vec3 dy = dFdy(worldPosition);
     vec3 normal = normalize(cross(dx, dy));
-    vec2 mesh = triangleMesh(surfaceCoordinates(worldPosition, normal));
+    vec2 mesh = gridPattern(surfaceCoordinates(worldPosition, normal));
     float lineAlpha = min(1.0, mesh.x * 0.92 + mesh.y * 0.24);
     float distanceFade = mix(1.0, 0.62, currentDistance);
     float alpha = lineAlpha * scanAlpha * distanceFade;
