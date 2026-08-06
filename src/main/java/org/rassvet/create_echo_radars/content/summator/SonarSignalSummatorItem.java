@@ -7,7 +7,10 @@ import net.minecraft.core.component.DataComponents;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.InteractionResultHolder;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
@@ -30,25 +33,41 @@ public final class SonarSignalSummatorItem extends BlockItem {
     @Override
     public InteractionResult useOn(UseOnContext context) {
         Level level = context.getLevel();
+        Player player = context.getPlayer();
+        if (player != null && player.isShiftKeyDown()) {
+            clearSelection(level, player, context.getItemInHand());
+            return InteractionResult.sidedSuccess(level.isClientSide);
+        }
+
         BlockPos clicked = context.getClickedPos();
         if (SonarGlass.isGlass(level, clicked)) {
-            if (!level.isClientSide && context.getPlayer() != null) {
-                if (context.getPlayer().isShiftKeyDown()) {
-                    clearTarget(context.getItemInHand());
-                    context.getPlayer().displayClientMessage(Component.translatable(
-                            "message.create_echo_radars.signal_summator.selection_cleared")
-                            .withStyle(ChatFormatting.YELLOW), true);
-                } else {
-                    setTarget(context.getItemInHand(), level, clicked);
-                    context.getPlayer().displayClientMessage(Component.translatable(
-                            "message.create_echo_radars.signal_summator.glass_selected",
-                            clicked.getX(), clicked.getY(), clicked.getZ())
-                            .withStyle(ChatFormatting.GREEN), true);
-                }
+            if (!level.isClientSide && player != null) {
+                setTarget(context.getItemInHand(), level, clicked);
+                player.displayClientMessage(Component.translatable(
+                        "message.create_echo_radars.signal_summator.glass_selected",
+                        clicked.getX(), clicked.getY(), clicked.getZ())
+                        .withStyle(ChatFormatting.GREEN), true);
             }
             return InteractionResult.sidedSuccess(level.isClientSide);
         }
         return super.useOn(context);
+    }
+
+    @Override
+    public InteractionResultHolder<ItemStack> use(Level level, Player player,
+                                                   InteractionHand hand) {
+        ItemStack stack = player.getItemInHand(hand);
+        if (!player.isShiftKeyDown()) return super.use(level, player, hand);
+        clearSelection(level, player, stack);
+        return InteractionResultHolder.sidedSuccess(stack, level.isClientSide);
+    }
+
+    private static void clearSelection(Level level, Player player, ItemStack stack) {
+        if (level.isClientSide) return;
+        clearTarget(stack);
+        player.displayClientMessage(Component.translatable(
+                "message.create_echo_radars.signal_summator.selection_cleared")
+                .withStyle(ChatFormatting.YELLOW), true);
     }
 
     @Override

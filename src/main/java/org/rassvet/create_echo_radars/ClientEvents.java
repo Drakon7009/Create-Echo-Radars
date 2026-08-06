@@ -16,6 +16,7 @@ import org.rassvet.create_echo_radars.client.MechanicalSonarRenderer;
 import org.rassvet.create_echo_radars.client.SonarGlassOverlay;
 import org.rassvet.create_echo_radars.client.SonarGlassVanillaDepthRenderer;
 import org.rassvet.create_echo_radars.client.SonarSignalSummatorRenderer;
+import org.rassvet.create_echo_radars.client.SonarSignalSummatorOutline;
 import org.rassvet.create_echo_radars.compat.fusion.SonarSlopeFrameConnectionPredicate;
 
 public final class ClientEvents {
@@ -36,6 +37,7 @@ public final class ClientEvents {
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRightClickBlock);
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRenderLevel);
             NeoForge.EVENT_BUS.addListener(SonarGlassOverlay::onRenderLevel);
+            NeoForge.EVENT_BUS.addListener(SonarSignalSummatorOutline::onClientTick);
         }
     }
 
