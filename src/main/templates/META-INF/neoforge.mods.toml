@@ -82,7 +82,14 @@ side = "BOTH"
 [[dependencies."${mod_id}"]]
 modId = "create_radar"
 type = "required"
-versionRange = "[0.4.9.4,0.5.0)"
+versionRange = "[0.4.9.4,6.0.0)"
+ordering = "AFTER"
+side = "BOTH"
+
+[[dependencies."${mod_id}"]]
+modId = "cbcmoreshells"
+type = "optional"
+versionRange = "[2.1.4,2.2.0)"
 ordering = "AFTER"
 side = "BOTH"
 

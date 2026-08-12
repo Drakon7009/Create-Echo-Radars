@@ -6,6 +6,7 @@
   "mixins": [
     "DeepSeasHullStrengthConfigMixin",
     "DataLinkBlockItemMixin",
+    "GuidedFuzeTorpedoMixin",
     "MonitorBlockEntityMixin",
     "MonitorInputHandlerMixin"
   ],

@@ -212,6 +212,7 @@ public abstract class DataLinkBlockItemMixin {
 
     @Redirect(
             method = "getFilterTarget",
+            require = 0,
             at = @At(
                     value = "INVOKE",
                     target = "Lnet/minecraft/world/level/block/state/BlockState;getBlock()Lnet/minecraft/world/level/block/Block;",

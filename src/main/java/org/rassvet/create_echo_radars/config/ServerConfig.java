@@ -29,6 +29,10 @@ public final class ServerConfig {
     private static final ModConfigSpec.IntValue TRACE_WORKER_THREADS;
     private static final ModConfigSpec.BooleanValue ENTITY_OCCLUSION_CHECK;
     private static final ModConfigSpec.BooleanValue TRACE_TIME_PROFILING;
+    private static final ModConfigSpec.DoubleValue TORPEDO_GUIDANCE_MAX_SEEK_DEGREES;
+    private static final ModConfigSpec.DoubleValue TORPEDO_GUIDANCE_YAW_DEGREES_PER_TICK;
+    private static final ModConfigSpec.DoubleValue TORPEDO_GUIDANCE_PITCH_DEGREES_PER_TICK;
+    private static final ModConfigSpec.DoubleValue TORPEDO_GUIDANCE_MAX_PITCH_DEGREES;
 
     static {
         ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
@@ -78,6 +82,22 @@ public final class ServerConfig {
         TRACE_TIME_PROFILING = builder.comment(
                         "Log aggregate worker and batch trace time for all sonars every 10 seconds.")
                 .define("debug.traceTime10s", false);
+        TORPEDO_GUIDANCE_MAX_SEEK_DEGREES = builder.comment(
+                        "Maximum horizontal seeker angle from the torpedo's heading when it first enters fluid.")
+                .defineInRange("compat.cbcMilitarySupplement.torpedoGuidance.maxSeekDegrees",
+                        180.0, 1.0, 180.0);
+        TORPEDO_GUIDANCE_YAW_DEGREES_PER_TICK = builder.comment(
+                        "Maximum horizontal turn applied to a CBC Military Supplement torpedo each tick.")
+                .defineInRange("compat.cbcMilitarySupplement.torpedoGuidance.yawDegreesPerTick",
+                        3.0, 0.0, 45.0);
+        TORPEDO_GUIDANCE_PITCH_DEGREES_PER_TICK = builder.comment(
+                        "Maximum depth correction applied to a CBC Military Supplement torpedo each tick.")
+                .defineInRange("compat.cbcMilitarySupplement.torpedoGuidance.pitchDegreesPerTick",
+                        1.0, 0.0, 10.0);
+        TORPEDO_GUIDANCE_MAX_PITCH_DEGREES = builder.comment(
+                        "Reference dive or climb angle at one block per tick for guided CBC Military Supplement torpedoes. Slower torpedoes receive a larger angle and faster torpedoes a smaller angle, up to an absolute 45 degree limit.")
+                .defineInRange("compat.cbcMilitarySupplement.torpedoGuidance.maxPitchDegrees",
+                        10.0, 0.0, 45.0);
         SPEC = builder.build();
     }
 
@@ -141,6 +161,22 @@ public final class ServerConfig {
 
     public static boolean traceTimeProfiling() {
         return TRACE_TIME_PROFILING.get();
+    }
+
+    public static double torpedoGuidanceMaxSeekDegrees() {
+        return TORPEDO_GUIDANCE_MAX_SEEK_DEGREES.get();
+    }
+
+    public static double torpedoGuidanceYawDegreesPerTick() {
+        return TORPEDO_GUIDANCE_YAW_DEGREES_PER_TICK.get();
+    }
+
+    public static double torpedoGuidancePitchDegreesPerTick() {
+        return TORPEDO_GUIDANCE_PITCH_DEGREES_PER_TICK.get();
+    }
+
+    public static double torpedoGuidanceMaxPitchDegrees() {
+        return TORPEDO_GUIDANCE_MAX_PITCH_DEGREES.get();
     }
 
     public static void save(int[] horizontalBeams, int[] verticalBeams,
