@@ -16,3 +16,12 @@ sonar_simulation/
 Create-Radar-master/
 GeneratorAccelerator-*/
 sable-main/
+
+# Local compatibility references and imported upstream worktrees
+/CBC-Military-Supplement-1.21.1-2.1.4.jar
+/create_radar-5.0-EA-1.0.1.jar
+/Create-Deep-Seas-Alpha2.1.4/
+/PowerGrid-0.5.5/
+/copycats-multiloader/
+/converted/
+/converted.rar
