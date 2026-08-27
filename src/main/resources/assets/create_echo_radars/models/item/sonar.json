@@ -1,3 +1,6 @@
 {
-  "parent": "create_echo_radars:block/sonar"
+  "parent": "create_echo_radars:block/sonar",
+  "display": {
+    "gui": { "rotation": [30, 45, 0], "scale": [0.625, 0.625, 0.625] }
+  }
 }
