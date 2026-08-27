@@ -1,1 +1,12 @@
-{"variants":{"facing=north":{"model":"create_echo_radars:block/side_scan_sonar"},"facing=east":{"model":"create_echo_radars:block/side_scan_sonar","y":90},"facing=south":{"model":"create_echo_radars:block/side_scan_sonar","y":180},"facing=west":{"model":"create_echo_radars:block/side_scan_sonar","y":270}}}
+{
+  "variants": {
+    "facing=north,upside_down=false": {"model": "create_echo_radars:block/side_scan_sonar", "x": 180},
+    "facing=east,upside_down=false": {"model": "create_echo_radars:block/side_scan_sonar", "x": 180, "y": 90},
+    "facing=south,upside_down=false": {"model": "create_echo_radars:block/side_scan_sonar", "x": 180, "y": 180},
+    "facing=west,upside_down=false": {"model": "create_echo_radars:block/side_scan_sonar", "x": 180, "y": 270},
+    "facing=north,upside_down=true": {"model": "create_echo_radars:block/side_scan_sonar"},
+    "facing=east,upside_down=true": {"model": "create_echo_radars:block/side_scan_sonar", "y": 90},
+    "facing=south,upside_down=true": {"model": "create_echo_radars:block/side_scan_sonar", "y": 180},
+    "facing=west,upside_down=true": {"model": "create_echo_radars:block/side_scan_sonar", "y": 270}
+  }
+}

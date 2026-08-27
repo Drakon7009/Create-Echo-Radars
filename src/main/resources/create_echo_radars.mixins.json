@@ -8,7 +8,8 @@
     "DataLinkBlockItemMixin",
     "GuidedFuzeTorpedoMixin",
     "MonitorBlockEntityMixin",
-    "MonitorInputHandlerMixin"
+    "MonitorInputHandlerMixin",
+    "RadarScanningBlockBehaviorMixin"
   ],
   "client": [
     "MonitorBlockClientMixin",

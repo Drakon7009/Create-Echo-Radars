@@ -30,6 +30,7 @@ import org.rassvet.create_echo_radars.content.sonar.SonarReturn;
 import org.rassvet.create_echo_radars.content.sonar.SonarRotation;
 import org.rassvet.create_echo_radars.config.SyncedServerConfig;
 
+import java.util.BitSet;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -39,14 +40,16 @@ import java.util.Map;
 public final class SonarMonitorRenderer {
     private static final float BACKGROUND_DEPTH = 0.940f;
     private static final float SECTOR_DEPTH = 0.943f;
-    private static final float GRID_DEPTH = 0.947f;
+    private static final float GRID_DEPTH = 0.954f;
     private static final float SWEEP_DEPTH = 0.949f;
     private static final float ECHO_DEPTH = 0.952f;
     private static final float TRACK_DEPTH = 0.957f;
     private static final float LABEL_DEPTH = 0.975f;
+    private static final float LABEL_SCALE = 1.45f;
     private static final float SIDE_SCAN_LABEL_SCALE = 1.70f;
     private static final float SIDE_SCAN_LABEL_INSET = 0.70f;
     private static final int ARC_STEPS = 48;
+    private static final int BACKGROUND_RASTER_RESOLUTION = 256;
     private static final float REVEAL_COMPLETE_EPSILON = 1.0e-4f;
     private static final float REVEAL_EDGE_MIN_WIDTH = 0.035f;
     private static final float REVEAL_EDGE_RANGE_CELLS = 8;
@@ -95,9 +98,9 @@ public final class SonarMonitorRenderer {
         }
 
         renderBackground(poseStack, buffers, palette, area, snapshot.horizontalSector());
-        renderGrid(snapshot, poseStack, buffers, area);
         renderEchoes(monitor, snapshot, poseStack, buffers, palette,
                 area, displayRange, partialTick);
+        renderGrid(snapshot, poseStack, buffers, area);
         renderTracks(monitor, snapshot, poseStack, buffers, area, displayRange,
                 hoveredTrackId, overrideHover, screenTrackRadius);
         if (area.minSize() >= 2) {
@@ -136,9 +139,9 @@ public final class SonarMonitorRenderer {
 
     private static void renderGrid(SonarMonitorSnapshot snapshot, PoseStack poseStack, MultiBufferSource buffers,
                                    SonarDisplayLayout.Area area) {
-        VertexConsumer buffer = buffers.getBuffer(RenderType.lines());
-        Matrix4f matrix = poseStack.last().pose();
-        Matrix3f normal = poseStack.last().normal();
+        VertexConsumer buffer = buffers.getBuffer(SonarRenderTypes.gridOverlay());
+        PixelGrid pixelGrid = PixelGrid.forArea(area);
+        BitSet occupiedPixels = new BitSet(pixelGrid.pixelCount());
         double halfSector = Math.toRadians(snapshot.horizontalSector() / 2.0);
         for (int ring = 1; ring <= 4; ring++) {
             float distance = ring / 4f;
@@ -148,7 +151,8 @@ public final class SonarMonitorRenderer {
                 double angle = -halfSector + 2 * halfSector * step / ARC_STEPS;
                 Vec3 next = displayPoint(SonarDisplayProjection.project(distance, angle,
                         snapshot.horizontalSector()), area);
-                line(buffer, matrix, normal, previous, next, GRID_DEPTH, 0.72f, 0.76f, 0.78f, 0.55f);
+                pixelLine(buffer, poseStack.last(), pixelGrid, occupiedPixels, previous, next,
+                        GRID_DEPTH, 0.72f, 0.76f, 0.78f, 0.55f);
                 previous = next;
             }
         }
@@ -158,7 +162,7 @@ public final class SonarMonitorRenderer {
                     snapshot.horizontalSector()), area);
             Vec3 edge = displayPoint(SonarDisplayProjection.project(1, angle,
                     snapshot.horizontalSector()), area);
-            line(buffer, matrix, normal, apex, edge,
+            pixelLine(buffer, poseStack.last(), pixelGrid, occupiedPixels, apex, edge,
                     GRID_DEPTH, 0.72f, 0.76f, 0.78f, ray == 2 ? 0.72f : 0.55f);
         }
     }
@@ -225,7 +229,6 @@ public final class SonarMonitorRenderer {
             long lifetimeAge = revealState == null || !revealState.fullyRevealed()
                     ? 0 : (long) Math.floor(Math.max(0,
                     gameTime + partialTick - revealState.fullyRevealedAt));
-            if (completed && oldPixelLifetime > 0 && lifetimeAge >= oldPixelLifetime) continue;
             List<SonarReturn> returns = frame.returns();
             FrameEchoLayout frameLayout = echoLayout(monitor, snapshot, frame);
             for (int returnIndex = 0; returnIndex < returns.size(); returnIndex++) {
@@ -280,11 +283,7 @@ public final class SonarMonitorRenderer {
                     plotArea.bottom(), plotArea.top(), SECTOR_DEPTH,
                     0.002f, 0.003f, 0.008f, 0.98f);
         }
-        renderSpecializedGrid(snapshot, poseStack, buffers, plotArea);
-        // Switching to the line render type above completes the previous debugQuads builder.
-        // Request a fresh consumer before appending echo pixels; retaining backgroundQuads here
-        // crashes with BufferBuilder "Not building" on BufferSource implementations used by Sable.
-        VertexConsumer echoQuads = buffers.getBuffer(RenderType.debugQuads());
+        VertexConsumer echoQuads = backgroundQuads;
         float sweepAngle = mechanicalSweepAngle(monitor, snapshot, partialTick);
         double currentTick = monitor.getLevel().getGameTime() + partialTick;
         ClientFrameHistory clientHistory = clientHistory(monitor, snapshot);
@@ -346,6 +345,7 @@ public final class SonarMonitorRenderer {
                         innerRight, innerLeft, ECHO_DEPTH,
                         color.red(), color.green(), color.blue(), pixelAlpha);
             }
+            renderSpecializedGrid(snapshot, poseStack, buffers, plotArea);
             double sweep = Math.toRadians(sweepAngle);
             float radius = circle.radius();
             Vec3 center = new Vec3(area.centerX(), 0, area.centerZ());
@@ -403,6 +403,7 @@ public final class SonarMonitorRenderer {
                 }
             }
         }
+        renderSpecializedGrid(snapshot, poseStack, buffers, plotArea);
         renderSpecializedTracks(monitor, snapshot, poseStack, buffers, plotArea, displayRange);
         if (area.minSize() >= 2 || forceLabels) {
             if (sideScan) {
@@ -569,11 +570,17 @@ public final class SonarMonitorRenderer {
             if (relative.length() > snapshot.range()) continue;
             SonarMath.Projection projection = SonarMath.project(relative, orientation);
             double normalized = projection.range() / Math.max(1, displayRange);
+            if (snapshot.sonarType()
+                    != org.rassvet.create_echo_radars.content.sonar.SonarType.MECHANICAL_IMAGING_C
+                    && !SonarDisplayLayout.trackInsideDisplayRange(
+                    projection.range(), displayRange)) continue;
             float x;
             float z;
             switch (snapshot.sonarType()) {
                 case MECHANICAL_IMAGING_C -> {
                     SonarMath.Projection horizontalProjection = SonarMath.projectHorizontal(relative, orientation);
+                    if (!SonarDisplayLayout.trackInsideDisplayRange(
+                            horizontalProjection.range(), displayRange)) continue;
                     normalized = horizontalProjection.range() / Math.max(1, displayRange);
                     double bearing = Math.toRadians(horizontalProjection.bearingDegrees());
                     SonarDisplayLayout.CircularGeometry circle = SonarDisplayLayout.circularGeometry(area, displayRange);
@@ -630,9 +637,9 @@ public final class SonarMonitorRenderer {
 
     private static void renderSpecializedGrid(SonarMonitorSnapshot snapshot, PoseStack poseStack,
                                                MultiBufferSource buffers, SonarDisplayLayout.Area area) {
-        VertexConsumer lines = buffers.getBuffer(RenderType.lines());
-        Matrix4f matrix = poseStack.last().pose();
-        Matrix3f normal = poseStack.last().normal();
+        VertexConsumer pixels = buffers.getBuffer(SonarRenderTypes.gridOverlay());
+        PixelGrid pixelGrid = PixelGrid.forArea(area);
+        BitSet occupiedPixels = new BitSet(pixelGrid.pixelCount());
         if (snapshot.sonarType()
                 == org.rassvet.create_echo_radars.content.sonar.SonarType.MECHANICAL_IMAGING_C) {
             float maximum = SonarDisplayLayout.circularGeometry(area, displayRange(snapshot)).radius();
@@ -643,15 +650,18 @@ public final class SonarMonitorRenderer {
                     double angle = Math.PI * 2 * step / (ARC_STEPS * 2.0);
                     Vec3 next = new Vec3(area.centerX() + Math.sin(angle) * radius, 0,
                             area.centerZ() + Math.cos(angle) * radius);
-                    if (previous != null) line(lines, matrix, normal, previous, next,
-                            GRID_DEPTH, 0.55f, 0.65f, 0.68f, 0.45f);
+                    if (previous != null) pixelLine(pixels, poseStack.last(), pixelGrid,
+                            occupiedPixels, previous, next, GRID_DEPTH,
+                            0.55f, 0.65f, 0.68f, 0.45f);
                     previous = next;
                 }
             }
-            line(lines, matrix, normal, new Vec3(area.centerX(), 0, area.centerZ() - maximum),
+            pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                    new Vec3(area.centerX(), 0, area.centerZ() - maximum),
                     new Vec3(area.centerX(), 0, area.centerZ() + maximum), GRID_DEPTH,
                     0.55f, 0.65f, 0.68f, 0.45f);
-            line(lines, matrix, normal, new Vec3(area.centerX() - maximum, 0, area.centerZ()),
+            pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                    new Vec3(area.centerX() - maximum, 0, area.centerZ()),
                     new Vec3(area.centerX() + maximum, 0, area.centerZ()), GRID_DEPTH,
                     0.55f, 0.65f, 0.68f, 0.45f);
             return;
@@ -662,22 +672,26 @@ public final class SonarMonitorRenderer {
             for (int division = 1; division < 5; division++) {
                 if (historyAlongX) {
                     float x = area.left() + area.width() * division / 5f;
-                    line(lines, matrix, normal, new Vec3(x, 0, area.bottom()),
+                    pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                            new Vec3(x, 0, area.bottom()),
                             new Vec3(x, 0, area.top()), GRID_DEPTH,
                             0.55f, 0.65f, 0.68f, 0.32f);
                 } else {
                     float z = area.bottom() + area.height() * division / 5f;
-                    line(lines, matrix, normal, new Vec3(area.left(), 0, z),
+                    pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                            new Vec3(area.left(), 0, z),
                             new Vec3(area.right(), 0, z), GRID_DEPTH,
                             0.55f, 0.65f, 0.68f, 0.32f);
                 }
             }
             if (historyAlongX) {
-                line(lines, matrix, normal, new Vec3(area.left(), 0, area.centerZ()),
+                pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                        new Vec3(area.left(), 0, area.centerZ()),
                         new Vec3(area.right(), 0, area.centerZ()), GRID_DEPTH,
                         0.75f, 0.8f, 0.82f, 0.72f);
             } else {
-                line(lines, matrix, normal, new Vec3(area.centerX(), 0, area.bottom()),
+                pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                        new Vec3(area.centerX(), 0, area.bottom()),
                         new Vec3(area.centerX(), 0, area.top()), GRID_DEPTH,
                         0.75f, 0.8f, 0.82f, 0.72f);
             }
@@ -687,12 +701,14 @@ public final class SonarMonitorRenderer {
                 for (int side : new int[]{-1, 1}) {
                     if (historyAlongX) {
                         float z = area.centerZ() + side * offset;
-                        line(lines, matrix, normal, new Vec3(area.left(), 0, z),
+                        pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                                new Vec3(area.left(), 0, z),
                                 new Vec3(area.right(), 0, z), GRID_DEPTH,
                                 0.55f, 0.65f, 0.68f, division == 3 ? 0.5f : 0.3f);
                     } else {
                         float x = area.centerX() + side * offset;
-                        line(lines, matrix, normal, new Vec3(x, 0, area.bottom()),
+                        pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                                new Vec3(x, 0, area.bottom()),
                                 new Vec3(x, 0, area.top()), GRID_DEPTH,
                                 0.55f, 0.65f, 0.68f, division == 3 ? 0.5f : 0.3f);
                     }
@@ -702,8 +718,9 @@ public final class SonarMonitorRenderer {
         }
         for (int division = 1; division < 4; division++) {
             float z = area.bottom() + area.height() * division / 4f;
-            line(lines, matrix, normal, new Vec3(area.left(), 0, z), new Vec3(area.right(), 0, z),
-                    GRID_DEPTH, 0.55f, 0.65f, 0.68f, 0.38f);
+            pixelLine(pixels, poseStack.last(), pixelGrid, occupiedPixels,
+                    new Vec3(area.left(), 0, z), new Vec3(area.right(), 0, z), GRID_DEPTH,
+                    0.55f, 0.65f, 0.68f, 0.38f);
         }
     }
 
@@ -1036,6 +1053,8 @@ public final class SonarMonitorRenderer {
             if (!SonarMath.insideCone(relative, orientation,
                     snapshot.horizontalSector(), snapshot.verticalSector(), snapshot.range())) continue;
             SonarMath.Projection projection = SonarMath.project(relative, orientation);
+            if (!SonarDisplayLayout.trackInsideDisplayRange(
+                    projection.range(), displayRange)) continue;
             double bearing = projection.bearingDegrees();
             Vec3 point = displayPoint(SonarDisplayProjection.project(
                             projection.range() / Math.max(1, displayRange), Math.toRadians(bearing),
@@ -1069,19 +1088,59 @@ public final class SonarMonitorRenderer {
                     (float) point.x - size * 0.035f,
                     (float) point.z, poseStack, buffers, size);
         }
+        Vec3 apex = displayPoint(SonarDisplayProjection.project(0, 0,
+                snapshot.horizontalSector()), area);
         for (int ray = 0; ray <= 4; ray++) {
             int angle = Math.round(-snapshot.horizontalSector() / 2f
                     + snapshot.horizontalSector() * ray / 4f);
             Vec3 point = displayPoint(SonarDisplayProjection.project(0.965f,
                     Math.toRadians(angle), snapshot.horizontalSector()), area);
-            drawLabel((angle > 0 ? "+" : "") + angle + "°", (float) point.x, (float) point.z,
+            String text = (angle > 0 ? "+" : "") + angle + "°";
+            Vec3 labelPoint = offsetLabelFromLine(text, point, apex, area, size);
+            drawLabel(text, (float) labelPoint.x, (float) labelPoint.z,
                     poseStack, buffers, size);
         }
     }
 
+    private static Vec3 offsetLabelFromLine(String text, Vec3 point, Vec3 lineOrigin,
+                                            SonarDisplayLayout.Area area, float size) {
+        double dx = point.x - lineOrigin.x;
+        double dz = point.z - lineOrigin.z;
+        double length = Math.hypot(dx, dz);
+        if (length < 1.0e-5) return point;
+
+        Font font = Minecraft.getInstance().font;
+        float scale = labelScale(size, LABEL_SCALE);
+        float clearance = scale * (Math.max(font.width(text) * 0.5f,
+                font.lineHeight * 0.5f) + 3);
+        double normalX = -dz / length;
+        double normalZ = dx / length;
+        Vec3 first = point.add(normalX * clearance, 0, normalZ * clearance);
+        Vec3 second = point.add(-normalX * clearance, 0, -normalZ * clearance);
+
+        // Prefer the side nearer the display centre. This pushes the two outside labels
+        // inward and keeps their enlarged glyphs clear of the sector boundary.
+        Vec3 chosen = distanceToDisplayCenter(first, area) <= distanceToDisplayCenter(second, area)
+                ? first : second;
+        float halfWidth = font.width(text) * scale * 0.5f;
+        float halfHeight = font.lineHeight * scale * 0.5f;
+        return new Vec3(
+                Math.max(area.left() + halfWidth,
+                        Math.min(area.right() - halfWidth, chosen.x)),
+                0,
+                Math.max(area.bottom() + halfHeight,
+                        Math.min(area.top() - halfHeight, chosen.z)));
+    }
+
+    private static double distanceToDisplayCenter(Vec3 point, SonarDisplayLayout.Area area) {
+        double dx = point.x - area.centerX();
+        double dz = point.z - area.centerZ();
+        return dx * dx + dz * dz;
+    }
+
     private static void drawLabel(String text, float x, float z, PoseStack poseStack,
                                   MultiBufferSource buffers, float size) {
-        drawLabel(text, x, z, poseStack, buffers, size, 1);
+        drawLabel(text, x, z, poseStack, buffers, size, LABEL_SCALE);
     }
 
     private static void drawSideScanLabel(String text, float x, float z, PoseStack poseStack,
@@ -1095,11 +1154,16 @@ public final class SonarMonitorRenderer {
         poseStack.pushPose();
         poseStack.translate(x, LABEL_DEPTH, z);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
-        float scale = 0.0022f * Math.min(1.35f, size / 2f) * scaleMultiplier;
+        float scale = labelScale(size, scaleMultiplier);
         poseStack.scale(scale, scale, scale);
-        font.drawInBatch(text, -font.width(text) / 2f, 0, 0xdde8e8e8, false,
+        font.drawInBatch(text, -font.width(text) / 2f, -font.lineHeight / 2f,
+                0xdde8e8e8, false,
                 poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, 0xF000F0);
         poseStack.popPose();
+    }
+
+    private static float labelScale(float size, float scaleMultiplier) {
+        return 0.0022f * Math.min(1.35f, size / 2f) * scaleMultiplier;
     }
 
     private static Vec3 displayPoint(SonarDisplayProjection.Point point, SonarDisplayLayout.Area area) {
@@ -1148,14 +1212,11 @@ public final class SonarMonitorRenderer {
         double now = gameTime + partialTick;
         pruneRevealStates(key, now);
         RevealState state = REVEAL_STATES.computeIfAbsent(key, ignored -> new RevealState(now));
-        double elapsed = Math.max(0, Math.min(4, now - state.lastTick));
+        double elapsed = Math.max(0, now - state.lastTick);
         state.lastTick = now;
         if (!advance) return state;
-        if (state.progress > cap) {
-            state.progress = cap;
-        } else {
-            state.progress = Math.min(cap, state.progress + (float) elapsed * speed);
-        }
+        state.progress = SonarDisplayLayout.advanceRevealProgress(
+                state.progress, cap, elapsed, speed);
         if (frame.completedTick() != 0 && state.progress >= 1 - REVEAL_COMPLETE_EPSILON
                 && Double.isNaN(state.fullyRevealedAt)) {
             state.progress = 1;
@@ -1278,6 +1339,87 @@ public final class SonarMonitorRenderer {
                                        float x, float y, float z,
                                        float red, float green, float blue, float alpha) {
         buffer.addVertex(pose.pose(), x, y, z).setColor(red, green, blue, alpha);
+    }
+
+    /**
+     * Draws the decorative sonar grid through a fixed-resolution raster. A 256 px logical
+     * surface keeps the pixel-art character of Create: Radars while giving large sonar displays
+     * smoother arcs and diagonals than its original 128 px sprites. Echo pixels are rendered
+     * elsewhere and never pass here.
+     */
+    private static void pixelLine(VertexConsumer buffer, PoseStack.Pose pose, PixelGrid grid,
+                                  BitSet occupiedPixels, Vec3 first, Vec3 second, float depth,
+                                  float red, float green, float blue, float alpha) {
+        int x0 = grid.column((float) first.x);
+        int z0 = grid.row((float) first.z);
+        int x1 = grid.column((float) second.x);
+        int z1 = grid.row((float) second.z);
+        int deltaX = Math.abs(x1 - x0);
+        int stepX = x0 < x1 ? 1 : -1;
+        int deltaZ = -Math.abs(z1 - z0);
+        int stepZ = z0 < z1 ? 1 : -1;
+        int error = deltaX + deltaZ;
+
+        while (true) {
+            int pixelIndex = z0 * grid.columns() + x0;
+            if (!occupiedPixels.get(pixelIndex)) {
+                occupiedPixels.set(pixelIndex);
+                colorQuad(buffer, pose, grid.pixelLeft(x0), grid.pixelRight(x0),
+                        grid.pixelBottom(z0), grid.pixelTop(z0), depth,
+                        red, green, blue, alpha);
+            }
+            if (x0 == x1 && z0 == z1) break;
+            int doubledError = error * 2;
+            if (doubledError >= deltaZ) {
+                error += deltaZ;
+                x0 += stepX;
+            }
+            if (doubledError <= deltaX) {
+                error += deltaX;
+                z0 += stepZ;
+            }
+        }
+    }
+
+    private record PixelGrid(SonarDisplayLayout.Area area, int columns, int rows,
+                             float pixelWidth, float pixelHeight) {
+        private static PixelGrid forArea(SonarDisplayLayout.Area area) {
+            float basePixelSize = area.minSize() / BACKGROUND_RASTER_RESOLUTION;
+            int columns = Math.max(1, Math.round(area.width() / basePixelSize));
+            int rows = Math.max(1, Math.round(area.height() / basePixelSize));
+            return new PixelGrid(area, columns, rows,
+                    area.width() / columns, area.height() / rows);
+        }
+
+        private int column(float x) {
+            return Math.max(0, Math.min(columns - 1,
+                    (int) Math.floor((x - area.left()) / pixelWidth)));
+        }
+
+        private int row(float z) {
+            return Math.max(0, Math.min(rows - 1,
+                    (int) Math.floor((z - area.bottom()) / pixelHeight)));
+        }
+
+        private float pixelLeft(int column) {
+            return area.left() + column * pixelWidth;
+        }
+
+        private float pixelRight(int column) {
+            return pixelLeft(column) + pixelWidth;
+        }
+
+        private float pixelBottom(int row) {
+            return area.bottom() + row * pixelHeight;
+        }
+
+        private float pixelTop(int row) {
+            return pixelBottom(row) + pixelHeight;
+        }
+
+        private int pixelCount() {
+            return columns * rows;
+        }
     }
 
     private static void line(VertexConsumer buffer, Matrix4f matrix, Matrix3f normal,

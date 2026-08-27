@@ -56,7 +56,18 @@ public final class SableSonarCompat {
         }
     }
 
+    public static List<VisibilityTarget> visibilityTargets(Level level, Vec3 sourcePosition) {
+        if (!ModList.get().isLoaded(SABLE_MOD_ID)) return List.of();
+        try {
+            return LoadedSable.visibilityTargets(level, sourcePosition);
+        } catch (LinkageError | RuntimeException ignored) {
+            return List.of();
+        }
+    }
+
     public record RaySegment(Vec3 origin, Vec3 direction, double startDistance, double endDistance) {}
+
+    public record VisibilityTarget(String id, Vec3 position) {}
 
     public static final class Snapshot {
         private static final Snapshot EMPTY = new Snapshot(List.of());
@@ -100,6 +111,26 @@ public final class SableSonarCompat {
             }
             extension.sable$setSubLevelIgnoring(subLevel ->
                     subLevel.getUniqueId().toString().equals(trackId));
+        }
+
+        private static List<VisibilityTarget> visibilityTargets(Level level, Vec3 sourcePosition) {
+            dev.ryanhcode.sable.api.sublevel.SubLevelContainer container =
+                    dev.ryanhcode.sable.api.sublevel.SubLevelContainer.getContainer(level);
+            if (container == null || container.getLoadedCount() == 0) return List.of();
+
+            dev.ryanhcode.sable.companion.SubLevelAccess owner =
+                    dev.ryanhcode.sable.companion.SableCompanion.INSTANCE
+                            .getContaining(level, sourcePosition);
+            java.util.UUID ownerId = owner == null ? null : owner.getUniqueId();
+            List<VisibilityTarget> targets = new ArrayList<>();
+            for (dev.ryanhcode.sable.sublevel.SubLevel subLevel :
+                    List.copyOf(container.getAllSubLevels())) {
+                if (subLevel.isRemoved() || subLevel.getUniqueId().equals(ownerId)) continue;
+                AABB bounds = subLevel.boundingBox().toMojang();
+                targets.add(new VisibilityTarget(
+                        subLevel.getUniqueId().toString(), bounds.getCenter()));
+            }
+            return List.copyOf(targets);
         }
 
         private static Snapshot captureLoadedSubLevels(Level level, Vec3 origin, SonarOrientation orientation,

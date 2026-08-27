@@ -56,10 +56,11 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
 
     @Override
     public BlockState getStateForPlacement(net.minecraft.world.item.context.BlockPlaceContext context) {
+        boolean upsideDown = SonarPlacement.isUpsideDown(
+                context.getClickedFace().getStepY(), context.isSecondaryUseActive());
         return defaultBlockState()
                 .setValue(FACING, context.getHorizontalDirection())
-                .setValue(UPSIDE_DOWN, sonarType == SonarType.MECHANICAL_IMAGING_C
-                        && context.isSecondaryUseActive());
+                .setValue(UPSIDE_DOWN, upsideDown);
     }
 
     @Override

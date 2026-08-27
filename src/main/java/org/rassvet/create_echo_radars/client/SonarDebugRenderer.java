@@ -34,6 +34,7 @@ import org.rassvet.create_echo_radars.content.sonar.NearbyBlockTracker;
 import org.rassvet.create_echo_radars.content.sonar.SonarAdaptiveTracePlan;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarOrientation;
+import org.rassvet.create_echo_radars.content.sonar.SonarRangeLimit;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 import org.rassvet.create_echo_radars.content.sonar.SonarVoxelDda;
 
@@ -67,12 +68,58 @@ public final class SonarDebugRenderer {
         selectedPos = null;
         selectedDimension = null;
         tracedRays = List.of();
+        SonarType type = sonar.getSonarType();
+        int clampedHorizontal = Math.max(SonarBlockEntity.MIN_ANGLE,
+                Math.min(type.maximumHorizontalAngle(), horizontalSector));
+        int clampedVertical = Math.max(SonarBlockEntity.MIN_ANGLE,
+                Math.min(type.maximumVerticalAngle(), verticalSector));
+        int maximumRange = SonarRangeLimit.effectiveMaximumRange(type,
+                clampedHorizontal, clampedVertical, SyncedServerConfig.maximumSonarRange(),
+                SyncedServerConfig.angleRangeReduction());
         anglePreview = new AnglePreview(sonar.getBlockPos().immutable(), level.dimension(),
-                Math.max(SonarBlockEntity.MIN_RANGE, Math.min(SonarBlockEntity.MAX_RANGE, range)),
-                Math.max(SonarBlockEntity.MIN_ANGLE, Math.min(SonarBlockEntity.MAX_ANGLE, horizontalSector)),
-                Math.max(SonarBlockEntity.MIN_ANGLE, Math.min(SonarBlockEntity.MAX_ANGLE, verticalSector)),
-                Math.max(SonarBlockEntity.MIN_TILT, Math.min(SonarBlockEntity.MAX_TILT, tiltAngle)),
+                Math.max(SonarBlockEntity.MIN_RANGE, Math.min(maximumRange, range)),
+                clampedHorizontal, clampedVertical,
+                SonarBlockEntity.clampTilt(type, tiltAngle),
                 Util.getMillis() + ANGLE_PREVIEW_DURATION_MS);
+        return true;
+    }
+
+    public static boolean isAnglePreviewEnabled(SonarBlockEntity sonar) {
+        Level level = sonar.getLevel();
+        if (level == null || anglePreview == null) return false;
+        if (Util.getMillis() >= anglePreview.expiresAtMillis) {
+            anglePreview = null;
+            return false;
+        }
+        return anglePreview.pos.equals(sonar.getBlockPos())
+                && anglePreview.dimension.equals(level.dimension());
+    }
+
+    public static boolean updateAnglePreview(SonarBlockEntity sonar, int range,
+                                             int horizontalSector, int verticalSector, int tiltAngle) {
+        Level level = sonar.getLevel();
+        if (level == null || anglePreview == null) return false;
+        if (Util.getMillis() >= anglePreview.expiresAtMillis) {
+            anglePreview = null;
+            return false;
+        }
+        if (!anglePreview.pos.equals(sonar.getBlockPos())
+                || !anglePreview.dimension.equals(level.dimension())) {
+            return false;
+        }
+        SonarType type = sonar.getSonarType();
+        int clampedHorizontal = Math.max(SonarBlockEntity.MIN_ANGLE,
+                Math.min(type.maximumHorizontalAngle(), horizontalSector));
+        int clampedVertical = Math.max(SonarBlockEntity.MIN_ANGLE,
+                Math.min(type.maximumVerticalAngle(), verticalSector));
+        int maximumRange = SonarRangeLimit.effectiveMaximumRange(type,
+                clampedHorizontal, clampedVertical, SyncedServerConfig.maximumSonarRange(),
+                SyncedServerConfig.angleRangeReduction());
+        anglePreview = new AnglePreview(anglePreview.pos, anglePreview.dimension,
+                Math.max(SonarBlockEntity.MIN_RANGE, Math.min(maximumRange, range)),
+                clampedHorizontal, clampedVertical,
+                SonarBlockEntity.clampTilt(type, tiltAngle),
+                anglePreview.expiresAtMillis);
         return true;
     }
 
@@ -130,7 +177,7 @@ public final class SonarDebugRenderer {
             List<Ray> nextRays = new ArrayList<>();
             if (rayMode.tracesAnything()) {
                 nextRays.addAll(traceRays(level, origin, orientation, range, sector, verticalSector,
-                        sonar.getSonarType(), rayMode));
+                        sonar.getTiltAngle(), sonar.getSonarType(), rayMode));
             }
             if (rayMode == SonarDebugRayMode.ALL && SyncedServerConfig.entityOcclusionCheck()) {
                 nextRays.addAll(traceEntityVisibilityRays(level, sonar, origin, orientation,
@@ -142,7 +189,7 @@ public final class SonarDebugRenderer {
         }
         renderGeometry(event.getPoseStack(), event.getCamera().getPosition(),
                 origin, orientation, range, sector, verticalSector,
-                sonar.getSonarType(), tracedRays, true);
+                sonar.getTiltAngle(), sonar.getSonarType(), tracedRays, true);
     }
 
     private static void renderAnglePreview(RenderLevelStageEvent event, Minecraft minecraft, Level level) {
@@ -164,12 +211,14 @@ public final class SonarDebugRenderer {
         Vec3 origin = sonar.emitterPosition();
         renderGeometry(event.getPoseStack(), event.getCamera().getPosition(),
                 origin, orientation, anglePreview.range, anglePreview.horizontalSector,
-                anglePreview.verticalSector, sonar.getSonarType(), List.of(), false);
+                anglePreview.verticalSector, anglePreview.tiltAngle,
+                sonar.getSonarType(), List.of(), false);
     }
 
     private static List<Ray> traceRays(Level level, Vec3 origin, SonarOrientation orientation,
                                        int range, int sector, int verticalSector,
-                                       SonarType sonarType, SonarDebugRayMode rayMode) {
+                                       int tiltAngle, SonarType sonarType,
+                                       SonarDebugRayMode rayMode) {
         int horizontalBeams = SyncedServerConfig.horizontalBeams(sonarType);
         int verticalBeams = SyncedServerConfig.verticalBeams(sonarType);
         SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
@@ -199,10 +248,10 @@ public final class SonarDebugRenderer {
         for (int i = 0; i < pending.size(); i++) {
             RayPlan plan = pending.get(i);
             double endDistance = plan.endDistance;
-            Vec3 direction = direction(orientation, settings, plan.leaf);
+            Vec3 direction = direction(orientation, settings, plan.leaf, tiltAngle, sonarType);
             Vec3 rayOrigin = sonarType == SonarType.SIDE_SCAN_D
-                    ? origin.add(orientation.right().scale(
-                    SideScanGeometry.emitterSideOffset(plan.leaf)))
+                    ? origin.add(orientation.forward().scale(
+                    SideScanGeometry.emitterForwardOffset(plan.leaf)))
                     : origin;
             SableSonarCompat.Snapshot sableSnapshot = SableSonarCompat.capture(level, rayOrigin,
                     orientation, range,
@@ -296,11 +345,32 @@ public final class SonarDebugRenderer {
             rays.add(new Ray(origin, blocked ? hit.getLocation() : target, blocked,
                     0, 0, 1, RayKind.ENTITY));
         }
+        for (SableSonarCompat.VisibilityTarget construction :
+                SableSonarCompat.visibilityTargets(level, origin)) {
+            Vec3 target = construction.position();
+            Vec3 relative = target.subtract(origin);
+            if (!org.rassvet.create_echo_radars.content.sonar.SonarMath.insideCone(
+                    relative, orientation, sector, verticalSector, range)) continue;
+            if (sonar.isAutoHeight()
+                    && Math.abs(org.rassvet.create_echo_radars.content.sonar.SonarMath
+                    .project(relative, orientation).up()) > sonar.displayYRange()) continue;
+            ClipContext context = new ClipContext(target, origin,
+                    ClipContext.Block.COLLIDER, ClipContext.Fluid.NONE, CollisionContext.empty());
+            SableSonarCompat.ignoreTrackedSubLevel(context, construction.id());
+            BlockHitResult hit = level.clip(context);
+            boolean blocked = hit.getType() != HitResult.Type.MISS;
+            rays.add(new Ray(origin, blocked ? hit.getLocation() : target, blocked,
+                    0, 0, 1, RayKind.ENTITY));
+        }
         return rays;
     }
 
     private static Vec3 direction(SonarOrientation orientation, SonarAdaptiveTracePlan.Settings settings,
-                                  SonarAdaptiveTracePlan.Leaf leaf) {
+                                  SonarAdaptiveTracePlan.Leaf leaf, int tiltAngle,
+                                  SonarType sonarType) {
+        if (sonarType == SonarType.SIDE_SCAN_D) {
+            return SideScanGeometry.rayDirection(orientation, settings, leaf, tiltAngle);
+        }
         double yaw = SonarAdaptiveTracePlan.bearing(leaf, settings);
         double pitch = SonarAdaptiveTracePlan.pitch(leaf, settings);
         return orientation.direction(yaw, pitch);
@@ -351,7 +421,8 @@ public final class SonarDebugRenderer {
 
     private static void renderGeometry(PoseStack poseStack, Vec3 camera,
                                        Vec3 origin, SonarOrientation orientation, int range,
-                                       int sector, int verticalSector, SonarType sonarType,
+                                       int sector, int verticalSector, int tiltAngle,
+                                       SonarType sonarType,
                                        List<Ray> rays, boolean renderTraceRays) {
         poseStack.pushPose();
         poseStack.translate(-camera.x, -camera.y, -camera.z);
@@ -364,7 +435,7 @@ public final class SonarDebugRenderer {
         RenderSystem.depthMask(false);
         RenderSystem.setShader(GameRenderer::getPositionColorShader);
 
-        drawSonarShell(matrix, origin, orientation, range, sector, verticalSector,
+        drawSonarShell(matrix, origin, orientation, range, sector, verticalSector, tiltAngle,
                 sonarType, camera, renderTraceRays);
         if (renderTraceRays) drawRays(matrix, camera, rays);
 
@@ -376,16 +447,37 @@ public final class SonarDebugRenderer {
         poseStack.popPose();
     }
 
+    static void drawPreviewShell(Matrix4f matrix, Vec3 origin, SonarOrientation orientation,
+                                 double fixedLength, int sector, int verticalSector,
+                                 int tiltAngle, SonarType sonarType) {
+        Matrix4f guiMatrix = new Matrix4f(matrix);
+        // Block-model rendering accepts a wide 3D depth range, while the GUI
+        // position-color pass can clip those same transformed vertices. Keep
+        // the model's projected X/Y but place every translucent face on a
+        // stable GUI depth, as the old visible 2D preview did.
+        guiMatrix.m02(0).m12(0).m22(0).m32(30);
+        drawSonarShell(guiMatrix, origin, orientation, fixedLength, sector, verticalSector, tiltAngle,
+                sonarType, Vec3.ZERO, false);
+    }
+
     private static void drawSonarShell(Matrix4f matrix, Vec3 origin, SonarOrientation orientation,
-                                       int range, int sector, int verticalSector, SonarType sonarType,
+                                       double range, int sector, int verticalSector, int tiltAngle,
+                                       SonarType sonarType,
                                        Vec3 camera, boolean drawEdges) {
         if (sonarType == SonarType.SIDE_SCAN_D) {
-            drawConeShell(matrix, origin.add(orientation.right().scale(-0.501)),
-                    orientation, range, sector, verticalSector,
-                    -90, -45, camera, drawEdges);
-            drawConeShell(matrix, origin.add(orientation.right().scale(0.501)),
-                    orientation, range, sector, verticalSector,
-                    90, -45, camera, drawEdges);
+            Vec3 emitterAxis = orientation.forward();
+            SonarOrientation rearBeam = SideScanGeometry.beamOrientation(
+                    orientation, -SideScanGeometry.CENTER_YAW_DEGREES, tiltAngle);
+            SonarOrientation frontBeam = SideScanGeometry.beamOrientation(
+                    orientation, SideScanGeometry.CENTER_YAW_DEGREES, tiltAngle);
+            drawConeShell(matrix,
+                    origin.add(emitterAxis.scale(-SideScanGeometry.EMITTER_FORWARD_OFFSET)),
+                    rearBeam, range, sector, verticalSector,
+                    0, 0, camera, drawEdges);
+            drawConeShell(matrix,
+                    origin.add(emitterAxis.scale(SideScanGeometry.EMITTER_FORWARD_OFFSET)),
+                    frontBeam, range, sector, verticalSector,
+                    0, 0, camera, drawEdges);
             return;
         }
         drawConeShell(matrix, origin, orientation, range, sector, verticalSector,
@@ -393,40 +485,65 @@ public final class SonarDebugRenderer {
     }
 
     private static void drawConeShell(Matrix4f matrix, Vec3 origin, SonarOrientation orientation,
-                                      int range, int sector, int verticalSector,
+                                      double range, int sector, int verticalSector,
                                       double centerYaw, double centerPitch,
                                       Vec3 camera, boolean drawEdges) {
         BufferBuilder buffer = Tesselator.getInstance().begin(
                 VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
         double halfYaw = sector / 2.0;
-        double halfPitch = Math.min(89.5, verticalSector / 2.0);
-        Vec3 previousTop = orientation.direction(centerYaw - halfYaw,
-                centerPitch + halfPitch).scale(range).add(origin);
-        Vec3 previousBottom = orientation.direction(centerYaw - halfYaw,
-                centerPitch - halfPitch).scale(range).add(origin);
+        double halfPitch = Math.min(90.0, verticalSector / 2.0);
+        double minYaw = centerYaw - halfYaw;
+        double maxYaw = centerYaw + halfYaw;
+        double minPitch = centerPitch - halfPitch;
+        double maxPitch = centerPitch + halfPitch;
+        int pitchSegments = Math.max(1,
+                (int) Math.ceil(SHELL_SEGMENTS * verticalSector / 180.0));
+
         int shellTriangles = 0;
-        for (int i = 1; i <= SHELL_SEGMENTS; i++) {
-            double yaw = centerYaw - halfYaw + sector * i / (double) SHELL_SEGMENTS;
-            Vec3 top = orientation.direction(yaw, centerPitch + halfPitch).scale(range).add(origin);
-            Vec3 bottom = orientation.direction(yaw, centerPitch - halfPitch).scale(range).add(origin);
+        Vec3 previousTop = orientation.direction(minYaw, maxPitch).scale(range).add(origin);
+        Vec3 previousBottom = orientation.direction(minYaw, minPitch).scale(range).add(origin);
+        for (int yawIndex = 1; yawIndex <= SHELL_SEGMENTS; yawIndex++) {
+            double previousYaw = minYaw + sector * (yawIndex - 1) / (double) SHELL_SEGMENTS;
+            double yaw = minYaw + sector * yawIndex / (double) SHELL_SEGMENTS;
+            Vec3 top = orientation.direction(yaw, maxPitch).scale(range).add(origin);
+            Vec3 bottom = orientation.direction(yaw, minPitch).scale(range).add(origin);
 
             shellTriangles += triangle(buffer, matrix, origin, previousTop, top, 0.08f);
             shellTriangles += triangle(buffer, matrix, origin, bottom, previousBottom, 0.08f);
-            shellTriangles += quad(buffer, matrix, previousBottom, bottom, top, previousTop, 0.035f);
+
+            for (int pitchIndex = 1; pitchIndex <= pitchSegments; pitchIndex++) {
+                double previousPitch = minPitch
+                        + verticalSector * (pitchIndex - 1) / (double) pitchSegments;
+                double pitch = minPitch + verticalSector * pitchIndex / (double) pitchSegments;
+                Vec3 lowerLeft = orientation.direction(previousYaw, previousPitch)
+                        .scale(range).add(origin);
+                Vec3 lowerRight = orientation.direction(yaw, previousPitch)
+                        .scale(range).add(origin);
+                Vec3 upperRight = orientation.direction(yaw, pitch)
+                        .scale(range).add(origin);
+                Vec3 upperLeft = orientation.direction(previousYaw, pitch)
+                        .scale(range).add(origin);
+                shellTriangles += quad(buffer, matrix,
+                        lowerLeft, lowerRight, upperRight, upperLeft, 0.035f);
+            }
+
             previousTop = top;
             previousBottom = bottom;
         }
 
-        Vec3 leftBottom = orientation.direction(centerYaw - halfYaw,
-                centerPitch - halfPitch).scale(range).add(origin);
-        Vec3 leftTop = orientation.direction(centerYaw - halfYaw,
-                centerPitch + halfPitch).scale(range).add(origin);
-        Vec3 rightBottom = orientation.direction(centerYaw + halfYaw,
-                centerPitch - halfPitch).scale(range).add(origin);
-        Vec3 rightTop = orientation.direction(centerYaw + halfYaw,
-                centerPitch + halfPitch).scale(range).add(origin);
-        shellTriangles += triangle(buffer, matrix, origin, leftBottom, leftTop, 0.1f, 0.3f, 1f, 0.18f);
-        shellTriangles += triangle(buffer, matrix, origin, rightTop, rightBottom, 1f, 0.12f, 0.08f, 0.18f);
+        Vec3 previousLeft = orientation.direction(minYaw, minPitch).scale(range).add(origin);
+        Vec3 previousRight = orientation.direction(maxYaw, minPitch).scale(range).add(origin);
+        for (int pitchIndex = 1; pitchIndex <= pitchSegments; pitchIndex++) {
+            double pitch = minPitch + verticalSector * pitchIndex / (double) pitchSegments;
+            Vec3 left = orientation.direction(minYaw, pitch).scale(range).add(origin);
+            Vec3 right = orientation.direction(maxYaw, pitch).scale(range).add(origin);
+            shellTriangles += triangle(buffer, matrix, origin, previousLeft, left,
+                    0.1f, 0.3f, 1f, 0.18f);
+            shellTriangles += triangle(buffer, matrix, origin, right, previousRight,
+                    1f, 0.12f, 0.08f, 0.18f);
+            previousLeft = left;
+            previousRight = right;
+        }
         if (shellTriangles > 0) BufferUploader.drawWithShader(buffer.buildOrThrow());
 
         if (!drawEdges) return;

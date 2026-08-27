@@ -180,6 +180,8 @@ public final class SonarConfigScreen {
                 .option(options.sideScanMovementOnly)
                 .option(options.maxConcurrentChunkReads)
                 .option(options.traceWorkerThreads)
+                .option(options.maximumSonarRange)
+                .option(options.angleRangeReduction)
                 .option(options.entityOcclusionCheck)
                 .build();
     }
@@ -278,6 +280,7 @@ public final class SonarConfigScreen {
                 values.sideScanPingPauseTicks,
                 values.sideScanMovementOnly,
                 values.maxConcurrentChunkReads, values.traceWorkerThreads,
+                values.maximumSonarRange, values.angleRangeReduction,
                 values.entityOcclusionCheck, values.traceTimeProfiling);
     }
 
@@ -308,6 +311,8 @@ public final class SonarConfigScreen {
         private boolean sideScanMovementOnly = SyncedServerConfig.sideScanMovementOnly();
         private int maxConcurrentChunkReads = SyncedServerConfig.maxConcurrentChunkReads();
         private int traceWorkerThreads = SyncedServerConfig.traceWorkerThreads();
+        private int maximumSonarRange = SyncedServerConfig.maximumSonarRange();
+        private boolean angleRangeReduction = SyncedServerConfig.angleRangeReduction();
         private boolean entityOcclusionCheck = SyncedServerConfig.entityOcclusionCheck();
         private boolean traceTimeProfiling = SyncedServerConfig.traceTimeProfiling();
 
@@ -352,6 +357,8 @@ public final class SonarConfigScreen {
         private final Option<Boolean> sideScanMovementOnly;
         private final Option<Integer> maxConcurrentChunkReads;
         private final Option<Integer> traceWorkerThreads;
+        private final Option<Integer> maximumSonarRange;
+        private final Option<Boolean> angleRangeReduction;
         private final Option<Boolean> entityOcclusionCheck;
 
         private OperatorOptions(Values values) {
@@ -404,6 +411,13 @@ public final class SonarConfigScreen {
             traceWorkerThreads = intOption("config.create_echo_radars.server.trace_workers",
                     ServerConfig.defaultTraceWorkerThreads(),
                     () -> values.traceWorkerThreads, value -> values.traceWorkerThreads = value, 1, 8, 1);
+            maximumSonarRange = intOption("config.create_echo_radars.server.maximum_sonar_range",
+                    ServerConfig.DEFAULT_MAXIMUM_SONAR_RANGE,
+                    () -> values.maximumSonarRange, value -> values.maximumSonarRange = value,
+                    ServerConfig.MINIMUM_SONAR_RANGE_LIMIT,
+                    ServerConfig.MAXIMUM_SONAR_RANGE_LIMIT, 1);
+            angleRangeReduction = booleanOption("config.create_echo_radars.server.angle_range_reduction", true,
+                    () -> values.angleRangeReduction, value -> values.angleRangeReduction = value);
             entityOcclusionCheck = booleanOption("config.create_echo_radars.server.entity_occlusion", false,
                     () -> values.entityOcclusionCheck, value -> values.entityOcclusionCheck = value);
         }

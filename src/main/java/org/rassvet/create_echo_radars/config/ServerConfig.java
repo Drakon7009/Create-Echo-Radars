@@ -10,6 +10,9 @@ import java.util.Map;
 public final class ServerConfig {
     public static final int DEFAULT_HORIZONTAL_BEAMS = 51;
     public static final int DEFAULT_VERTICAL_BEAMS = 5;
+    public static final int DEFAULT_MAXIMUM_SONAR_RANGE = 96;
+    public static final int MINIMUM_SONAR_RANGE_LIMIT = 32;
+    public static final int MAXIMUM_SONAR_RANGE_LIMIT = 512;
     public static final ModConfigSpec SPEC;
 
     private static final Map<SonarType, ModConfigSpec.IntValue> HORIZONTAL_BEAMS =
@@ -27,6 +30,8 @@ public final class ServerConfig {
     private static final ModConfigSpec.BooleanValue SIDE_SCAN_MOVEMENT_ONLY;
     private static final ModConfigSpec.IntValue MAX_CHUNK_READS;
     private static final ModConfigSpec.IntValue TRACE_WORKER_THREADS;
+    private static final ModConfigSpec.IntValue MAXIMUM_SONAR_RANGE;
+    private static final ModConfigSpec.BooleanValue ANGLE_RANGE_REDUCTION;
     private static final ModConfigSpec.BooleanValue ENTITY_OCCLUSION_CHECK;
     private static final ModConfigSpec.BooleanValue TRACE_TIME_PROFILING;
     private static final ModConfigSpec.DoubleValue TORPEDO_GUIDANCE_MAX_SEEK_DEGREES;
@@ -76,6 +81,13 @@ public final class ServerConfig {
                 .defineInRange("scanning.maxConcurrentChunkReads", 2, 1, 8);
         TRACE_WORKER_THREADS = builder.comment("Worker threads used for sonar ray tracing.")
                 .defineInRange("scanning.traceWorkerThreads", defaultTraceWorkerThreads(), 1, 8);
+        MAXIMUM_SONAR_RANGE = builder.comment(
+                        "Maximum selectable sonar range in blocks before field-of-view reduction is applied.")
+                .defineInRange("scanning.maximumSonarRange", DEFAULT_MAXIMUM_SONAR_RANGE,
+                        MINIMUM_SONAR_RANGE_LIMIT, MAXIMUM_SONAR_RANGE_LIMIT);
+        ANGLE_RANGE_REDUCTION = builder.comment(
+                        "Gradually reduce maximum sonar range after the selected angle sum exceeds two thirds of this sonar's maximum angle sum. At maximum angles the range is halved.")
+                .define("scanning.angleRangeReduction", true);
         ENTITY_OCCLUSION_CHECK = builder.comment(
                         "Hide entity tracks when a solid block blocks the direct sonar ray. Disabled by default.")
                 .define("scanning.entityOcclusionCheck", false);
@@ -155,6 +167,14 @@ public final class ServerConfig {
         return TRACE_WORKER_THREADS.get();
     }
 
+    public static int maximumSonarRange() {
+        return MAXIMUM_SONAR_RANGE.get();
+    }
+
+    public static boolean angleRangeReduction() {
+        return ANGLE_RANGE_REDUCTION.get();
+    }
+
     public static boolean entityOcclusionCheck() {
         return ENTITY_OCCLUSION_CHECK.get();
     }
@@ -185,7 +205,8 @@ public final class ServerConfig {
                             int blocksPerTick, int pingPauseTicks, int sideScanPingPauseTicks,
                             boolean sideScanMovementOnly,
                             int maxConcurrentChunkReads,
-                            int traceWorkerThreads, boolean entityOcclusionCheck,
+                            int traceWorkerThreads, int maximumSonarRange,
+                            boolean angleRangeReduction, boolean entityOcclusionCheck,
                             boolean traceTimeProfiling) {
         SonarType[] types = SonarType.values();
         if (horizontalBeams.length != types.length || verticalBeams.length != types.length) {
@@ -208,6 +229,9 @@ public final class ServerConfig {
         SIDE_SCAN_MOVEMENT_ONLY.set(sideScanMovementOnly);
         MAX_CHUNK_READS.set(clamp(maxConcurrentChunkReads, 1, 8));
         TRACE_WORKER_THREADS.set(clamp(traceWorkerThreads, 1, 8));
+        MAXIMUM_SONAR_RANGE.set(clamp(maximumSonarRange,
+                MINIMUM_SONAR_RANGE_LIMIT, MAXIMUM_SONAR_RANGE_LIMIT));
+        ANGLE_RANGE_REDUCTION.set(angleRangeReduction);
         ENTITY_OCCLUSION_CHECK.set(entityOcclusionCheck);
         TRACE_TIME_PROFILING.set(traceTimeProfiling);
         SPEC.save();

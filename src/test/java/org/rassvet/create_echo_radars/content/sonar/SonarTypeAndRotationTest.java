@@ -7,29 +7,86 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class SonarTypeAndRotationTest {
     @Test
+    void shiftReversesTheOrientationSelectedByTheMountingSurface() {
+        org.junit.jupiter.api.Assertions.assertFalse(SonarPlacement.isUpsideDown(1, false));
+        assertTrue(SonarPlacement.isUpsideDown(1, true));
+        assertTrue(SonarPlacement.isUpsideDown(-1, false));
+        org.junit.jupiter.api.Assertions.assertFalse(SonarPlacement.isUpsideDown(-1, true));
+    }
+
+    @Test
     void typeDefaultsMatchTheFourDisplayGeometries() {
         assertEquals(10, SonarType.ECHO_SOUNDER_A.defaultHorizontalAngle());
         assertEquals(60, SonarType.MECHANICAL_IMAGING_C.defaultVerticalAngle());
         assertEquals(3, SonarType.SIDE_SCAN_D.defaultHorizontalAngle());
         assertEquals(20, SonarType.FORWARD_LOOKING_F.defaultVerticalAngle());
+        assertEquals(60, SonarType.ECHO_SOUNDER_A.maximumHorizontalAngle());
+        assertEquals(60, SonarType.ECHO_SOUNDER_A.maximumVerticalAngle());
+        assertEquals(80, SonarType.MECHANICAL_IMAGING_C.maximumVerticalAngle());
+        assertEquals(80, SonarType.SIDE_SCAN_D.maximumVerticalAngle());
+        assertEquals(120, SonarType.FORWARD_LOOKING_F.maximumHorizontalAngle());
+        assertEquals(80, SonarType.FORWARD_LOOKING_F.maximumVerticalAngle());
     }
 
     @Test
-    void sideScanUsesTwoEmittersOutsideTheBlockAndAimsDownwardToBothSides() {
+    void sideScanUsesTheModelsFrontAndRearEmittersAndAimsAwayFromBothEnds() {
         SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
                 128, 3, 60, 31, 3, 4, 0);
         java.util.List<SonarAdaptiveTracePlan.Leaf> leaves =
                 SideScanGeometry.createLeaves(31, 3);
 
         assertEquals(5 * 3 * 2, leaves.size());
-        assertTrue(leaves.stream().anyMatch(leaf ->
-                SideScanGeometry.emitterSideOffset(leaf) < -0.5
-                        && SonarAdaptiveTracePlan.bearing(leaf, settings) < -88
-                        && SonarAdaptiveTracePlan.pitch(leaf, settings) < 0));
-        assertTrue(leaves.stream().anyMatch(leaf ->
-                SideScanGeometry.emitterSideOffset(leaf) > 0.5
-                        && SonarAdaptiveTracePlan.bearing(leaf, settings) > 88
-                        && SonarAdaptiveTracePlan.pitch(leaf, settings) < 0));
+        SonarAdaptiveTracePlan.Leaf rearCenter = leaves.stream()
+                .filter(leaf -> leaf.beam() == 15 && leaf.vertical() == 1
+                        && leaf.bearingOffset() < 0).findFirst().orElseThrow();
+        SonarAdaptiveTracePlan.Leaf frontCenter = leaves.stream()
+                .filter(leaf -> leaf.beam() == 15 && leaf.vertical() == 1
+                        && leaf.bearingOffset() > 0).findFirst().orElseThrow();
+
+        assertTrue(SideScanGeometry.emitterForwardOffset(rearCenter) < -0.5);
+        assertTrue(SideScanGeometry.emitterForwardOffset(frontCenter) > 0.5);
+        assertEquals(-180, SideScanGeometry.rayYaw(settings, rearCenter), 1.0e-6);
+        assertEquals(0, SideScanGeometry.rayYaw(settings, frontCenter), 1.0e-6);
+        assertEquals(-45, SideScanGeometry.rayPitch(settings, rearCenter, 0), 1.0e-6);
+        assertEquals(-45, SideScanGeometry.rayPitch(settings, frontCenter, 0), 1.0e-6);
+    }
+
+    @Test
+    void sideScanTiltMovesTheOpposingBeamsSlightlyInOppositeWorldDirections() {
+        double basePitch = SideScanGeometry.centerPitch(0);
+        double tiltedPitch = SideScanGeometry.centerPitch(20);
+
+        double frontBaseAngle = basePitch;
+        double rearBaseAngle = 180 - basePitch;
+        double frontTiltedAngle = tiltedPitch;
+        double rearTiltedAngle = 180 - tiltedPitch;
+
+        assertEquals(15, frontTiltedAngle - frontBaseAngle, 1.0e-9);
+        assertEquals(-15, rearTiltedAngle - rearBaseAngle, 1.0e-9);
+    }
+
+    @Test
+    void sideScanExtremeTiltKeepsEachBeamBasisRigid() {
+        assertEquals(-45, SideScanGeometry.centerPitch(0), 1.0e-9);
+        assertEquals(-30, SideScanGeometry.centerPitch(90), 1.0e-9);
+        assertEquals(-60, SideScanGeometry.centerPitch(-90), 1.0e-9);
+        assertEquals(-15, SideScanGeometry.clampTilt(-90));
+        assertEquals(15, SideScanGeometry.clampTilt(90));
+        for (int tilt : new int[]{-90, -45, 0, 45, 90}) {
+            SideScanGeometry.PitchBasis basis = SideScanGeometry.pitchBasis(tilt);
+            double forwardLength = Math.hypot(
+                    basis.forwardOutward(), basis.forwardUp());
+            double upLength = Math.hypot(basis.upOutward(), basis.upUp());
+            double dot = basis.forwardOutward() * basis.upOutward()
+                    + basis.forwardUp() * basis.upUp();
+            double determinant = basis.forwardOutward() * basis.upUp()
+                    - basis.forwardUp() * basis.upOutward();
+
+            assertEquals(1, forwardLength, 1.0e-9);
+            assertEquals(1, upLength, 1.0e-9);
+            assertEquals(0, dot, 1.0e-9);
+            assertEquals(1, determinant, 1.0e-9);
+        }
     }
 
     @Test

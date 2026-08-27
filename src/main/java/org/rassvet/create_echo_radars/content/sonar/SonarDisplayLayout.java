@@ -41,6 +41,11 @@ public final class SonarDisplayLayout {
         return new Area(1 - width, 1, 1 - height, 1);
     }
 
+    public static boolean trackInsideDisplayRange(double trackRange, int displayRange) {
+        return Double.isFinite(trackRange) && trackRange >= 0
+                && trackRange <= Math.max(1, displayRange);
+    }
+
     public static float echoPixelPitch(Area area, int horizontalBeams, int displayRange) {
         int horizontalIntervals = Math.max(1, horizontalBeams - 1);
         int radialIntervals = Math.max(1, displayRange);
@@ -373,11 +378,22 @@ public final class SonarDisplayLayout {
         if (lifetimeTicks == 0) {
             return newScanActive ? 1 - clamp01(newSweepAlpha) : 1;
         }
-        return clamp01(1 - Math.max(0, ageTicks) / (float) lifetimeTicks);
+        float lifetimeAlpha = clamp01(1 - Math.max(0, ageTicks) / (float) lifetimeTicks);
+        if (!latestCompletedFrame) return lifetimeAlpha;
+        if (!newScanActive) return 1;
+        return Math.max(lifetimeAlpha, 1 - clamp01(newSweepAlpha));
     }
 
     public static float revealProgressPerTick(int blocksPerTick, int range) {
         return Math.max(1, blocksPerTick) / (float) Math.max(1, range);
+    }
+
+    public static float advanceRevealProgress(float progress, float cap,
+                                              double elapsedTicks, float speed) {
+        if (progress > cap) return cap;
+        double elapsed = Math.max(0, elapsedTicks);
+        double advance = elapsed * Math.max(0, speed);
+        return Math.min(cap, progress + (float) advance);
     }
 
     public static boolean hideOldFrameAfterFullRefresh(boolean enabled, long frameEpoch,

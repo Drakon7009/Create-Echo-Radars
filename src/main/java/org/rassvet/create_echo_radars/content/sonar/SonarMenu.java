@@ -36,7 +36,7 @@ public class SonarMenu extends AbstractContainerMenu {
         addDataSlot(sonarType);
         addDataSlot(autoHeight);
         if (sonar != null) {
-            range.set(sonar.getSonarRange());
+            range.set(sonar.getConfiguredSonarRange());
             sector.set(sonar.getHorizontalSector());
             verticalSector.set(sonar.getVerticalSector());
             tiltAngle.set(sonar.getTiltAngle());
