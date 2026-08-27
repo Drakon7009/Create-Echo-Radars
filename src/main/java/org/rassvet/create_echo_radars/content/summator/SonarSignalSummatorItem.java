@@ -18,6 +18,8 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.server.level.ServerLevel;
+import org.rassvet.create_echo_radars.ModNetworking;
 import org.jetbrains.annotations.Nullable;
 import org.rassvet.create_echo_radars.content.glass.SonarGlass;
 
@@ -43,6 +45,7 @@ public final class SonarSignalSummatorItem extends BlockItem {
         if (SonarGlass.isGlass(level, clicked)) {
             if (!level.isClientSide && player != null) {
                 setTarget(context.getItemInHand(), level, clicked);
+                ModNetworking.sendGlassPulse((ServerLevel) level, clicked, level.getGameTime());
                 player.displayClientMessage(Component.translatable(
                         "message.create_echo_radars.signal_summator.glass_selected",
                         clicked.getX(), clicked.getY(), clicked.getZ())
