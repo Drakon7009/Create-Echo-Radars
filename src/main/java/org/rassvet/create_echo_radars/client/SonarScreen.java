@@ -49,6 +49,9 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private static final int SLIDER_HEIGHT = 26;
     /** The preview is angular only. Its length must never be derived from sonar range. */
     private static final double PREVIEW_CONE_LENGTH = 1.55;
+    /** Center of the red forward-looking emitter in sonar.obj, relative to the block center. */
+    private static final double FORWARD_PREVIEW_EMITTER_FORWARD_OFFSET = 0.4755;
+    private static final double FORWARD_PREVIEW_EMITTER_UP_OFFSET = -0.176;
 
     private IntSlider range;
     private IntSlider sector;
@@ -194,8 +197,13 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         int previewLeft = leftPos + CONTROLS_WIDTH + 3;
         graphics.enableScissor(previewLeft, topPos + 16,
                 leftPos + imageWidth - 1, topPos + imageHeight - 1);
-        renderAngleVolume(graphics, currentHorizontalAngle(), currentVerticalAngle(), currentTiltAngle());
-        renderSonarModel(graphics, partialTick);
+        if (sonarType() == SonarType.FORWARD_LOOKING_F) {
+            renderSonarModel(graphics, partialTick);
+            renderAngleVolume(graphics, currentHorizontalAngle(), currentVerticalAngle(), currentTiltAngle());
+        } else {
+            renderAngleVolume(graphics, currentHorizontalAngle(), currentVerticalAngle(), currentTiltAngle());
+            renderSonarModel(graphics, partialTick);
+        }
         graphics.drawString(font, "H " + currentHorizontalAngle() + "°",
                 leftPos + CONTROLS_WIDTH + 8, topPos + 23, 0xff8ed8ff, false);
         graphics.drawString(font, "V " + currentVerticalAngle() + "°",
@@ -238,7 +246,10 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         PoseStack poseStack = graphics.pose();
         graphics.flush();
         poseStack.pushPose();
-        applyPreviewTransform(poseStack, previewYaw(sonar), sonar.getSonarType());
+        float sectorYaw = previewYaw(sonar);
+        // Keep the forward-looking sector on the visible right-hand side of the block.
+        if (sonar.getSonarType() == SonarType.FORWARD_LOOKING_F) sectorYaw += 180.0f;
+        applyPreviewTransform(poseStack, sectorYaw, sonar.getSonarType());
         Matrix4f matrix = poseStack.last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -270,10 +281,9 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
             poseStack.translate(-0.5, -0.5, -0.5);
         }
         if (sonar.getSonarType() == SonarType.FORWARD_LOOKING_F) {
-            // The forward-looking model texture faces opposite its logical emitter direction.
-            // Rotate only the model; the preview shell already follows the real scan geometry.
+            // Turn only the model so its red emitter faces the separately positioned sector.
             poseStack.translate(0.5, 0.5, 0.5);
-            poseStack.mulPose(Axis.YP.rotationDegrees(90.0f));
+            poseStack.mulPose(Axis.YP.rotationDegrees(180.0f));
             poseStack.translate(-0.5, -0.5, -0.5);
         }
 
@@ -327,7 +337,11 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
                     base.direction(mechanicalAngle + 90, 0), base.up());
             case SIDE_SCAN_D, FORWARD_LOOKING_F -> base;
         };
-        Vec3 origin = SonarBlockEntity.emitterPosition(new Vec3(0.5, 0.5, 0.5),
+        Vec3 origin = sonar.getSonarType() == SonarType.FORWARD_LOOKING_F
+                ? new Vec3(0.5, 0.5, 0.5)
+                .add(unTilted.forward().scale(FORWARD_PREVIEW_EMITTER_FORWARD_OFFSET))
+                .add(unTilted.up().scale(FORWARD_PREVIEW_EMITTER_UP_OFFSET))
+                : SonarBlockEntity.emitterPosition(new Vec3(0.5, 0.5, 0.5),
                 sonar.getSonarType(), unTilted, mechanicalAngle);
         SonarOrientation orientation = sonar.getSonarType() == SonarType.SIDE_SCAN_D
                 ? unTilted : SonarBlockEntity.applyTilt(unTilted, tiltAngle);
