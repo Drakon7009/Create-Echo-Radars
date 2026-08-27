@@ -33,6 +33,7 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jetbrains.annotations.Nullable;
 import org.rassvet.create_echo_radars.config.ServerConfig;
+import org.rassvet.create_echo_radars.config.SyncedServerConfig;
 
 import java.util.Collection;
 import java.util.HashMap;
@@ -44,7 +45,7 @@ import java.util.Set;
 public class SonarBlockEntity extends KineticBlockEntity
         implements IRadar, SonarDataSource, MenuProvider, INetworkNode {
     public static final int MIN_RANGE = 16;
-    public static final int MAX_RANGE = 128;
+    public static final int MAX_RANGE = ServerConfig.DEFAULT_MAXIMUM_SONAR_RANGE;
     public static final int MIN_SECTOR = 15;
     public static final int MAX_SECTOR = 120;
     public static final int MIN_ANGLE = 1;
@@ -112,7 +113,7 @@ public class SonarBlockEntity extends KineticBlockEntity
                 Vec3 localCenter = Vec3.atCenterOf(worldPosition);
                 Vec3 worldCenter = PhysicsHandler.getWorldVec(level, localCenter);
                 Vec3 scanOrigin = emitterPosition(worldCenter, getSonarType(), unTilted, scanAngle);
-                scanEntitiesAtScanStart(scanOrigin, scanOrientation, range,
+                scanEntitiesAtScanStart(scanOrigin, scanOrientation, getSonarRange(),
                         Math.round(SonarRotation.MECHANICAL_SCAN_STEP_DEGREES),
                         verticalSector, autoHeight);
             }
@@ -187,7 +188,7 @@ public class SonarBlockEntity extends KineticBlockEntity
     private void updateScanner() {
         if (scanningBehavior == null) return;
         Vec3 forward = worldForward();
-        scanningBehavior.setRange(range);
+        scanningBehavior.setRange(getSonarRange());
         scanningBehavior.setFov(horizontalSector);
         scanningBehavior.setYRange(displayYRange());
         scanningBehavior.setScanPos(emitterPosition());
@@ -196,7 +197,7 @@ public class SonarBlockEntity extends KineticBlockEntity
     }
 
     public int displayYRange() {
-        return displayYRange(range, autoHeight, verticalSector, tiltAngle);
+        return displayYRange(getSonarRange(), autoHeight, verticalSector, tiltAngle);
     }
 
     private static int displayYRange(int range, boolean autoHeight) {
@@ -228,7 +229,9 @@ public class SonarBlockEntity extends KineticBlockEntity
     }
 
     public SonarOrientation orientation(int previewTiltAngle) {
-        return applyTilt(unTiltedOrientation(), Mth.clamp(previewTiltAngle, MIN_TILT, MAX_TILT));
+        SonarOrientation unTilted = unTiltedOrientation();
+        return getSonarType() == SonarType.SIDE_SCAN_D ? unTilted
+                : applyTilt(unTilted, clampTilt(getSonarType(), previewTiltAngle));
     }
 
     public SonarOrientation displayOrientation() {
@@ -254,7 +257,7 @@ public class SonarBlockEntity extends KineticBlockEntity
     private SonarOrientation baseOrientation() {
         SonarOrientation base = SonarOrientation.of(this);
         if (!isUpsideDown()) return base;
-        return new SonarOrientation(base.forward(), base.right().scale(-1), base.up().scale(-1));
+        return new SonarOrientation(base.forward().scale(-1), base.right(), base.up().scale(-1));
     }
 
     public static Vec3 emitterPosition(Vec3 blockCenter, SonarType type,
@@ -278,6 +281,18 @@ public class SonarBlockEntity extends KineticBlockEntity
                 orientation.direction(0, tiltDegrees + 90));
     }
 
+    public static int minimumTilt(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? SideScanGeometry.MIN_TILT_DEGREES : MIN_TILT;
+    }
+
+    public static int maximumTilt(SonarType type) {
+        return type == SonarType.SIDE_SCAN_D ? SideScanGeometry.MAX_TILT_DEGREES : MAX_TILT;
+    }
+
+    public static int clampTilt(SonarType type, int tiltDegrees) {
+        return Mth.clamp(tiltDegrees, minimumTilt(type), maximumTilt(type));
+    }
+
     public Vec3 worldForward() {
         return orientation().forward();
     }
@@ -288,9 +303,9 @@ public class SonarBlockEntity extends KineticBlockEntity
             return level.getFluidState(BlockPos.containing(emitterPosition())).is(FluidTags.WATER);
         }
         Vec3 center = emitterPosition();
-        Vec3 right = unTiltedOrientation().right().scale(SideScanGeometry.EMITTER_SIDE_OFFSET);
-        return level.getFluidState(BlockPos.containing(center.add(right))).is(FluidTags.WATER)
-                || level.getFluidState(BlockPos.containing(center.subtract(right))).is(FluidTags.WATER);
+        Vec3 forward = unTiltedOrientation().forward().scale(SideScanGeometry.EMITTER_FORWARD_OFFSET);
+        return level.getFluidState(BlockPos.containing(center.add(forward))).is(FluidTags.WATER)
+                || level.getFluidState(BlockPos.containing(center.subtract(forward))).is(FluidTags.WATER);
     }
 
     @Override
@@ -302,7 +317,7 @@ public class SonarBlockEntity extends KineticBlockEntity
                 ? java.util.stream.Stream.<RadarTrack>empty()
                 : scanningBehavior.getRadarTracks().stream())
                 .filter(track -> insideScanVolume(track.position().subtract(origin), orientation,
-                        horizontalSector, verticalSector, range))
+                        horizontalSector, verticalSector, getSonarRange()))
                 .filter(track -> !autoHeight
                         || Math.abs(SonarMath.project(track.position().subtract(origin), orientation).up())
                         <= displayYRange())
@@ -322,12 +337,15 @@ public class SonarBlockEntity extends KineticBlockEntity
         }
         if (relative.lengthSqr() < 1.0e-8) return true;
         Vec3 direction = relative.normalize();
-        Vec3 leftCenter = orientation.direction(-90, -45);
-        Vec3 rightCenter = orientation.direction(90, -45);
+        Vec3 negativeCenter = SideScanGeometry.beamOrientation(orientation,
+                -SideScanGeometry.CENTER_YAW_DEGREES, tiltAngle).forward();
+        Vec3 positiveCenter = SideScanGeometry.beamOrientation(orientation,
+                SideScanGeometry.CENTER_YAW_DEGREES, tiltAngle).forward();
         double halfDiagonal = Math.toRadians(Math.min(89,
                 Math.hypot(horizontalAngle, verticalAngle) * 0.5));
         double threshold = Math.cos(halfDiagonal);
-        return direction.dot(leftCenter) >= threshold || direction.dot(rightCenter) >= threshold;
+        return direction.dot(negativeCenter) >= threshold
+                || direction.dot(positiveCenter) >= threshold;
     }
 
     private boolean isEntityVisible(String entityId, Vec3 origin, Vec3 target) {
@@ -366,7 +384,23 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     @Override
     public int getSonarRange() {
-        return range;
+        return Math.min(getConfiguredSonarRange(), SonarRangeLimit.effectiveMaximumRange(
+                getSonarType(), horizontalSector, verticalSector,
+                maximumConfiguredRange(), angleRangeReductionEnabled()));
+    }
+
+    public int getConfiguredSonarRange() {
+        return Math.min(range, maximumConfiguredRange());
+    }
+
+    private int maximumConfiguredRange() {
+        return level != null && level.isClientSide
+                ? SyncedServerConfig.maximumSonarRange() : ServerConfig.maximumSonarRange();
+    }
+
+    private boolean angleRangeReductionEnabled() {
+        return level != null && level.isClientSide
+                ? SyncedServerConfig.angleRangeReduction() : ServerConfig.angleRangeReduction();
     }
 
     @Override
@@ -384,8 +418,7 @@ public class SonarBlockEntity extends KineticBlockEntity
     }
 
     public boolean isUpsideDown() {
-        return getSonarType() == SonarType.MECHANICAL_IMAGING_C
-                && getBlockState().getValue(SonarBlock.UPSIDE_DOWN);
+        return getBlockState().getValue(SonarBlock.UPSIDE_DOWN);
     }
 
     @Override
@@ -399,14 +432,20 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     public boolean applySettings(Player player, int newRange, int newHorizontalSector,
                                  int newVerticalSector, int newTiltAngle, boolean newAutoHeight) {
+        SonarType type = getSonarType();
         if (player.distanceToSqr(Vec3.atCenterOf(worldPosition)) > 64
-                || newRange < MIN_RANGE || newRange > MAX_RANGE
-                || newHorizontalSector < MIN_ANGLE || newHorizontalSector > MAX_ANGLE
-                || newVerticalSector < MIN_ANGLE || newVerticalSector > MAX_ANGLE
-                || newTiltAngle < MIN_TILT || newTiltAngle > MAX_TILT) {
+                || newRange < MIN_RANGE || newRange > ServerConfig.maximumSonarRange()
+                || newHorizontalSector < MIN_ANGLE
+                || newHorizontalSector > type.maximumHorizontalAngle()
+                || newVerticalSector < MIN_ANGLE
+                || newVerticalSector > type.maximumVerticalAngle()
+                || newTiltAngle < minimumTilt(type)
+                || newTiltAngle > maximumTilt(type)) {
             return false;
         }
-        range = newRange;
+        range = Math.min(newRange, SonarRangeLimit.effectiveMaximumRange(type,
+                newHorizontalSector, newVerticalSector,
+                ServerConfig.maximumSonarRange(), ServerConfig.angleRangeReduction()));
         horizontalSector = newHorizontalSector;
         verticalSector = newVerticalSector;
         tiltAngle = newTiltAngle;
@@ -422,7 +461,7 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     @Override
     public float getRange() {
-        return range;
+        return getSonarRange();
     }
 
     @Override
@@ -472,13 +511,14 @@ public class SonarBlockEntity extends KineticBlockEntity
     @Override
     protected void read(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.read(tag, registries, clientPacket);
-        range = Mth.clamp(tag.contains("Range") ? tag.getInt("Range") : MAX_RANGE, MIN_RANGE, MAX_RANGE);
+        range = Mth.clamp(tag.contains("Range") ? tag.getInt("Range") : MAX_RANGE,
+                MIN_RANGE, ServerConfig.MAXIMUM_SONAR_RANGE_LIMIT);
         SonarType type = getSonarType();
         horizontalSector = Mth.clamp(tag.contains("Sector") ? tag.getInt("Sector")
-                : type.defaultHorizontalAngle(), MIN_ANGLE, MAX_ANGLE);
+                : type.defaultHorizontalAngle(), MIN_ANGLE, type.maximumHorizontalAngle());
         verticalSector = Mth.clamp(tag.contains("VerticalSector") ? tag.getInt("VerticalSector")
-                : type.defaultVerticalAngle(), MIN_ANGLE, MAX_ANGLE);
-        tiltAngle = Mth.clamp(tag.getInt("TiltAngle"), MIN_TILT, MAX_TILT);
+                : type.defaultVerticalAngle(), MIN_ANGLE, type.maximumVerticalAngle());
+        tiltAngle = clampTilt(type, tag.getInt("TiltAngle"));
         autoHeight = !tag.contains("AutoHeight") || tag.getBoolean("AutoHeight");
         mechanicalAngle = SonarRotation.wrap(tag.getFloat("MechanicalAngle"));
         previousMechanicalAngle = mechanicalAngle;

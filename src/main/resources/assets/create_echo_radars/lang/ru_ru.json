@@ -29,6 +29,7 @@
   "gui.create_echo_radars.tilt_angle": "Наклон: %s",
   "gui.create_echo_radars.auto_height": "Автомасштаб: %s",
   "gui.create_echo_radars.angle_preview": "Переключить предпросмотр углов",
+  "gui.create_echo_radars.sector_preview": "Сектор обзора",
   "gui.create_echo_radars.apply": "Применить",
   "config.create_echo_radars.title": "Настройки Create: Echo Radars",
   "config.create_echo_radars.category.monitor": "Монитор",

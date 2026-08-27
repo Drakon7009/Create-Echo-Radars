@@ -1,3 +1,6 @@
 {
-  "parent": "minecraft:item/debug_stick"
+  "parent": "minecraft:item/handheld",
+  "textures": {
+    "layer0": "create_echo_radars:item/sonar_debug_tool"
+  }
 }

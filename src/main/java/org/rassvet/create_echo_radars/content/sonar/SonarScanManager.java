@@ -125,10 +125,9 @@ public final class SonarScanManager {
                     Vec3.atLowerCornerOf(facing.getNormal()),
                     Vec3.atLowerCornerOf(facing.getClockWise().getNormal()),
                     new Vec3(0, 1, 0));
-            if (sonarBlock.sonarType() == SonarType.MECHANICAL_IMAGING_C
-                    && cell.state().getValue(SonarBlock.UPSIDE_DOWN)) {
-                baseOrientation = new SonarOrientation(baseOrientation.forward(),
-                        baseOrientation.right().scale(-1), baseOrientation.up().scale(-1));
+            if (cell.state().getValue(SonarBlock.UPSIDE_DOWN)) {
+                baseOrientation = new SonarOrientation(baseOrientation.forward().scale(-1),
+                        baseOrientation.right(), baseOrientation.up().scale(-1));
             }
             SonarOrientation unTilted = switch (sonarBlock.sonarType()) {
                 case ECHO_SOUNDER_A -> new SonarOrientation(baseOrientation.up().scale(-1),
@@ -138,18 +137,29 @@ public final class SonarScanManager {
                         baseOrientation.direction(settings.get().mechanicalAngle + 90, 0), baseOrientation.up());
                 case SIDE_SCAN_D, FORWARD_LOOKING_F -> baseOrientation;
             };
-            SonarOrientation orientation = SonarBlockEntity.applyTilt(unTilted, settings.get().tiltAngle);
+            int resolvedTiltAngle = SonarBlockEntity.clampTilt(
+                    sonarBlock.sonarType(), settings.get().tiltAngle);
+            SonarOrientation orientation = sonarBlock.sonarType() == SonarType.SIDE_SCAN_D
+                    ? unTilted : SonarBlockEntity.applyTilt(unTilted, resolvedTiltAngle);
             Vec3 origin = SonarBlockEntity.emitterPosition(Vec3.atCenterOf(pos),
                     sonarBlock.sonarType(), unTilted, settings.get().mechanicalAngle);
             Vec3 displayOrigin = sonarBlock.sonarType() == SonarType.MECHANICAL_IMAGING_C
                     ? Vec3.atCenterOf(pos).add(unTilted.up().scale(0.25)) : origin;
             SonarOrientation displayOrientation = sonarBlock.sonarType() == SonarType.MECHANICAL_IMAGING_C
                     ? baseOrientation : orientation;
+            int resolvedHorizontalSector = clamp(settings.get().sector,
+                    SonarBlockEntity.MIN_ANGLE, sonarBlock.sonarType().maximumHorizontalAngle());
+            int resolvedVerticalSector = clamp(settings.get().verticalSector,
+                    SonarBlockEntity.MIN_ANGLE, sonarBlock.sonarType().maximumVerticalAngle());
+            int effectiveRange = Math.min(settings.get().range,
+                    SonarRangeLimit.effectiveMaximumRange(sonarBlock.sonarType(),
+                            resolvedHorizontalSector, resolvedVerticalSector,
+                            ServerConfig.maximumSonarRange(), ServerConfig.angleRangeReduction()));
             ensureJob(new Descriptor(pos, origin, displayOrigin, orientation.forward(),
                     orientation.right(), orientation.up(),
                     displayOrientation.forward(), displayOrientation.right(), displayOrientation.up(),
-                    sonarBlock.sonarType(), settings.get().range, settings.get().sector,
-                    settings.get().verticalSector, settings.get().tiltAngle, settings.get().mechanicalAngle,
+                    sonarBlock.sonarType(), effectiveRange, resolvedHorizontalSector,
+                    resolvedVerticalSector, resolvedTiltAngle, settings.get().mechanicalAngle,
                     0, level.getGameTime(),
                     sonarBlock.sonarType() != SonarType.MECHANICAL_IMAGING_C,
                     ServerConfig.horizontalBeams(sonarBlock.sonarType()),
@@ -170,7 +180,7 @@ public final class SonarScanManager {
                                 && blockEntity.getInt("z") == pos.getZ()) {
                             int range = clamp(blockEntity.contains("Range") ? blockEntity.getInt("Range")
                                     : SonarBlockEntity.MAX_RANGE,
-                                    SonarBlockEntity.MIN_RANGE, SonarBlockEntity.MAX_RANGE);
+                                    SonarBlockEntity.MIN_RANGE, ServerConfig.MAXIMUM_SONAR_RANGE_LIMIT);
                             int sector = clamp(blockEntity.contains("Sector") ? blockEntity.getInt("Sector")
                                     : SonarType.FORWARD_LOOKING_F.defaultHorizontalAngle(),
                                     SonarBlockEntity.MIN_ANGLE, SonarBlockEntity.MAX_ANGLE);
@@ -329,9 +339,10 @@ public final class SonarScanManager {
             }
 
             boolean pending = false;
-            for (double side : new double[]{-SideScanGeometry.EMITTER_SIDE_OFFSET,
-                    SideScanGeometry.EMITTER_SIDE_OFFSET}) {
-                Vec3 emitter = descriptor.origin.add(descriptor.right.scale(side));
+            Vec3 emitterAxis = descriptor.forward;
+            for (double forward : new double[]{-SideScanGeometry.EMITTER_FORWARD_OFFSET,
+                    SideScanGeometry.EMITTER_FORWARD_OFFSET}) {
+                Vec3 emitter = descriptor.origin.add(emitterAxis.scale(forward));
                 EmitterState state = emitterState(chunkReader.probe(
                         BlockPos.containing(emitter), usedChunks));
                 if (state == EmitterState.WATER) return EmitterState.WATER;
@@ -941,8 +952,13 @@ public final class SonarScanManager {
                         displayOrientation, absoluteBearing, descriptor.tiltAngle);
                 return sampleOrientation.direction(0, pitch);
             }
-            return new SonarOrientation(descriptor.forward,
-                    descriptor.right, descriptor.up).direction(bearing, pitch);
+            SonarOrientation orientation = new SonarOrientation(descriptor.forward,
+                    descriptor.right, descriptor.up);
+            if (descriptor.type == SonarType.SIDE_SCAN_D) {
+                return SideScanGeometry.rayDirection(
+                        orientation, settings, leaf, descriptor.tiltAngle);
+            }
+            return orientation.direction(bearing, pitch);
         }
 
         private Vec3 origin(Descriptor descriptor) {
@@ -956,8 +972,8 @@ public final class SonarScanManager {
                         descriptor.displayOrigin, displayOrientation, absoluteBearing);
             }
             if (descriptor.type != SonarType.SIDE_SCAN_D) return descriptor.origin;
-            double side = SideScanGeometry.emitterSideOffset(leaf);
-            return descriptor.origin.add(descriptor.right.scale(side));
+            return descriptor.origin.add(descriptor.forward.scale(
+                    SideScanGeometry.emitterForwardOffset(leaf)));
         }
     }
 

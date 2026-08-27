@@ -180,6 +180,10 @@ public final class SonarMonitorScreen extends Screen {
             if (relative.length() > snapshot.range()) continue;
             SonarMath.Projection projection = SonarMath.project(relative, orientation);
             double normalizedRange = projection.range() / Math.max(1, displayRange);
+            if (snapshot.sonarType()
+                    != org.rassvet.create_echo_radars.content.sonar.SonarType.MECHANICAL_IMAGING_C
+                    && !SonarDisplayLayout.trackInsideDisplayRange(
+                    projection.range(), displayRange)) continue;
             SonarDisplayProjection.Point point;
             switch (snapshot.sonarType()) {
                 case FORWARD_LOOKING_F -> {
@@ -190,6 +194,8 @@ public final class SonarMonitorScreen extends Screen {
                 }
                 case MECHANICAL_IMAGING_C -> {
                     SonarMath.Projection horizontalProjection = SonarMath.projectHorizontal(relative, orientation);
+                    if (!SonarDisplayLayout.trackInsideDisplayRange(
+                            horizontalProjection.range(), displayRange)) continue;
                     double horizontalRange = horizontalProjection.range() / Math.max(1, displayRange);
                     double angle = Math.toRadians(horizontalProjection.bearingDegrees());
                     point = new SonarDisplayProjection.Point(Math.sin(angle) * horizontalRange * 0.94,

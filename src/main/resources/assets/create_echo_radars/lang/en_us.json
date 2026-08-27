@@ -29,6 +29,7 @@
   "gui.create_echo_radars.tilt_angle": "Tilt: %s",
   "gui.create_echo_radars.auto_height": "Auto height: %s",
   "gui.create_echo_radars.angle_preview": "Toggle angle preview",
+  "gui.create_echo_radars.sector_preview": "Viewing sector",
   "gui.create_echo_radars.apply": "Apply",
   "config.create_echo_radars.title": "Create: Echo Radars Settings",
   "config.create_echo_radars.category.monitor": "Monitor",

@@ -61,6 +61,14 @@ public final class SyncedServerConfig {
         return current.traceWorkerThreads;
     }
 
+    public static int maximumSonarRange() {
+        return current.maximumSonarRange;
+    }
+
+    public static boolean angleRangeReduction() {
+        return current.angleRangeReduction;
+    }
+
     public static boolean entityOcclusionCheck() {
         return current.entityOcclusionCheck;
     }
@@ -75,11 +83,13 @@ public final class SyncedServerConfig {
                              int sideScanPingPauseTicks,
                              boolean sideScanMovementOnly,
                              int maxConcurrentChunkReads, int traceWorkerThreads,
+                             int maximumSonarRange, boolean angleRangeReduction,
                              boolean entityOcclusionCheck, boolean traceTimeProfiling) {
         current = new Snapshot(horizontalBeams, verticalBeams, additionalRays,
                 refineOnlyUndetectedNeighbors, hitRefinementBacktrackBlocks, blocksPerTick,
                 pingPauseTicks, sideScanPingPauseTicks, sideScanMovementOnly,
                 maxConcurrentChunkReads, traceWorkerThreads,
+                maximumSonarRange, angleRangeReduction,
                 entityOcclusionCheck, traceTimeProfiling);
     }
 
@@ -98,6 +108,7 @@ public final class SyncedServerConfig {
                 ServerConfig.sideScanPingPauseTicks(),
                 ServerConfig.sideScanMovementOnly(),
                 ServerConfig.maxConcurrentChunkReads(), ServerConfig.traceWorkerThreads(),
+                ServerConfig.maximumSonarRange(), ServerConfig.angleRangeReduction(),
                 ServerConfig.entityOcclusionCheck(), ServerConfig.traceTimeProfiling());
     }
 
@@ -107,6 +118,7 @@ public final class SyncedServerConfig {
                            int sideScanPingPauseTicks,
                            boolean sideScanMovementOnly,
                            int maxConcurrentChunkReads, int traceWorkerThreads,
+                           int maximumSonarRange, boolean angleRangeReduction,
                            boolean entityOcclusionCheck, boolean traceTimeProfiling) {
         public Snapshot {
             int expected = SonarType.values().length;
@@ -127,7 +139,8 @@ public final class SyncedServerConfig {
                 verticalBeams[i] = ServerConfig.defaultVerticalBeams(type);
             }
             return new Snapshot(horizontalBeams, verticalBeams, 4, false, 5, 10, 20, 20, false,
-                    2, ServerConfig.defaultTraceWorkerThreads(), false, false);
+                    2, ServerConfig.defaultTraceWorkerThreads(),
+                    ServerConfig.DEFAULT_MAXIMUM_SONAR_RANGE, true, false, false);
         }
     }
 }

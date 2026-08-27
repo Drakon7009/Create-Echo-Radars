@@ -93,6 +93,13 @@ class SonarMathTest {
     }
 
     @Test
+    void tracksOutsideTheVisibleAutoRangeStayOffTheDisplay() {
+        assertTrue(SonarDisplayLayout.trackInsideDisplayRange(64, 64));
+        assertFalse(SonarDisplayLayout.trackInsideDisplayRange(64.01, 64));
+        assertFalse(SonarDisplayLayout.trackInsideDisplayRange(Double.NaN, 64));
+    }
+
+    @Test
     void sideScanWaterfallUsesAdjacentRowsFromNewestToOldest() {
         SonarDisplayLayout.Area area =
                 SonarDisplayLayout.area(new SonarMonitorDimensions(4, 4));
@@ -546,7 +553,19 @@ class SonarMathTest {
     void positiveOldPixelLifetimeFadesByConfiguredTicks() {
         assertEquals(1, SonarDisplayLayout.oldFrameAlpha(80, 0, true, 1, false), 1.0e-6);
         assertEquals(0.5f, SonarDisplayLayout.oldFrameAlpha(80, 40, true, 1, false), 1.0e-6);
-        assertEquals(0, SonarDisplayLayout.oldFrameAlpha(80, 80, false, 0, true), 1.0e-6);
+        assertEquals(0, SonarDisplayLayout.oldFrameAlpha(80, 80, false, 0, false), 1.0e-6);
+    }
+
+    @Test
+    void latestCompletedFrameWaitsForTheNextSweepBeforeClearing() {
+        assertEquals(1, SonarDisplayLayout.oldFrameAlpha(60, 200,
+                false, 0, true), 1.0e-6);
+        assertEquals(1, SonarDisplayLayout.oldFrameAlpha(60, 200,
+                true, 0, true), 1.0e-6);
+        assertEquals(0.5f, SonarDisplayLayout.oldFrameAlpha(60, 200,
+                true, 0.5f, true), 1.0e-6);
+        assertEquals(0, SonarDisplayLayout.oldFrameAlpha(60, 200,
+                true, 1, true), 1.0e-6);
     }
 
     @Test
@@ -554,6 +573,16 @@ class SonarMathTest {
         assertEquals(1f / 128, SonarDisplayLayout.revealProgressPerTick(1, 128), 1.0e-6);
         assertEquals(10f / 128, SonarDisplayLayout.revealProgressPerTick(10, 128), 1.0e-6);
         assertEquals(16f / 128, SonarDisplayLayout.revealProgressPerTick(16, 128), 1.0e-6);
+    }
+
+    @Test
+    void revealAnimationCatchesUpAfterAClientFrameStall() {
+        assertEquals(0.5f, SonarDisplayLayout.advanceRevealProgress(
+                0, 1, 10, 0.05f), 1.0e-6);
+        assertEquals(1, SonarDisplayLayout.advanceRevealProgress(
+                0, 1, 30, 0.05f), 1.0e-6);
+        assertEquals(0.25f, SonarDisplayLayout.advanceRevealProgress(
+                0, 0.25f, 30, 0.05f), 1.0e-6);
     }
 
     @Test
@@ -733,7 +762,8 @@ class SonarMathTest {
         SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
                 128, 3, 90, 5, 9, 16, 5);
         SonarAdaptiveTracePlan.Leaf rightBottom =
-                new SonarAdaptiveTracePlan.Leaf(0, 0, 90, -45);
+                new SonarAdaptiveTracePlan.Leaf(0, 0, 90,
+                        SideScanGeometry.CENTER_PITCH_DEGREES);
 
         List<SonarAdaptiveTracePlan.Leaf> refinements =
                 SonarAdaptiveTracePlan.sideScanRefinementsForHit(rightBottom, 20, settings);

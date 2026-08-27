@@ -54,6 +54,41 @@ class TorpedoGuidanceMathTest {
     }
 
     @Test
+    void persistentGuidanceFollowsAConstantRadiusWithoutLosingSpeed() {
+        double speed = 0.678;
+        double turnDegrees = 3.0;
+        TorpedoGuidanceMath.Velocity targetDirection = direction(90.0, 0.0, 1.0);
+        TorpedoGuidanceMath.Velocity velocity = direction(0.0, 0.0, speed);
+        TorpedoGuidanceMath.Velocity[] positions = new TorpedoGuidanceMath.Velocity[13];
+        positions[0] = new TorpedoGuidanceMath.Velocity(0.0, 0.0, 0.0);
+        double commandPitch = Double.NaN;
+        double appliedPitch = Double.NaN;
+
+        for (int tick = 1; tick < positions.length; tick++) {
+            TorpedoGuidanceMath.Steering steering =
+                    TorpedoGuidanceMath.steerWithPersistentPitch(
+                            velocity, targetDirection, turnDegrees, 0.0, 0.0,
+                            commandPitch, appliedPitch);
+            velocity = steering.velocity();
+            commandPitch = steering.commandPitchDegrees();
+            appliedPitch = steering.appliedPitchDegrees();
+            positions[tick] = add(positions[tick - 1], velocity);
+
+            assertEquals(speed, velocity.length(), EPSILON);
+            assertEquals(tick * turnDegrees,
+                    TorpedoGuidanceMath.yawDegrees(velocity.x(), velocity.z()), 1.0e-7);
+        }
+
+        Circle circle = circumcircle(positions[0], positions[1], positions[2]);
+        double expectedRadius = speed / (2.0 * Math.sin(Math.toRadians(turnDegrees) * 0.5));
+        assertEquals(expectedRadius, circle.radius(), 1.0e-7);
+        for (TorpedoGuidanceMath.Velocity position : positions) {
+            assertEquals(circle.radius(), Math.hypot(
+                    position.x() - circle.centerX(), position.z() - circle.centerZ()), 1.0e-7);
+        }
+    }
+
+    @Test
     void slowerTorpedoesReceiveMoreDiveAuthorityAndFasterOnesDiveSlower() {
         double slowSpeed = 0.678;
         double fastSpeed = 1.48;
@@ -207,4 +242,25 @@ class TorpedoGuidanceMathTest {
         return new TorpedoGuidanceMath.Velocity(
                 velocity.x() * factor, velocity.y() * factor, velocity.z() * factor);
     }
+
+    private static Circle circumcircle(TorpedoGuidanceMath.Velocity first,
+                                       TorpedoGuidanceMath.Velocity second,
+                                       TorpedoGuidanceMath.Velocity third) {
+        double determinant = 2.0 * (first.x() * (second.z() - third.z())
+                + second.x() * (third.z() - first.z())
+                + third.x() * (first.z() - second.z()));
+        double firstSquared = first.x() * first.x() + first.z() * first.z();
+        double secondSquared = second.x() * second.x() + second.z() * second.z();
+        double thirdSquared = third.x() * third.x() + third.z() * third.z();
+        double centerX = (firstSquared * (second.z() - third.z())
+                + secondSquared * (third.z() - first.z())
+                + thirdSquared * (first.z() - second.z())) / determinant;
+        double centerZ = (firstSquared * (third.x() - second.x())
+                + secondSquared * (first.x() - third.x())
+                + thirdSquared * (second.x() - first.x())) / determinant;
+        return new Circle(centerX, centerZ,
+                Math.hypot(first.x() - centerX, first.z() - centerZ));
+    }
+
+    private record Circle(double centerX, double centerZ, double radius) {}
 }
