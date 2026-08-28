@@ -3,6 +3,7 @@ package org.rassvet.create_echo_radars.content.sonar;
 import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.datalink.DataLinkBlockItem;
 import com.mojang.serialization.MapCodec;
+import com.simibubi.create.AllItems;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
 import com.simibubi.create.foundation.block.IBE;
 import net.minecraft.core.BlockPos;
@@ -76,7 +77,7 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
     protected ItemInteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
                                               Player player, net.minecraft.world.InteractionHand hand,
                                               BlockHitResult hit) {
-        if (stack.getItem() instanceof DataLinkBlockItem) {
+        if (stack.getItem() instanceof DataLinkBlockItem || AllItems.WRENCH.isIn(stack)) {
             return ItemInteractionResult.SKIP_DEFAULT_BLOCK_INTERACTION;
         }
         return ItemInteractionResult.PASS_TO_DEFAULT_BLOCK_INTERACTION;
