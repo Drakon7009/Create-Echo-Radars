@@ -32,6 +32,7 @@ import org.rassvet.create_echo_radars.content.glass.SonarGlassNetworkManager;
 import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlock;
 import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
+import org.rassvet.create_echo_radars.content.sonar.SonarDataLinkBlock;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -44,8 +45,13 @@ public abstract class DataLinkBlockItemMixin {
     private void createEchoRadars$attachSonarGlass(UseOnContext ctx,
                                                    CallbackInfoReturnable<InteractionResult> cir) {
         BlockPos clickedPos = ctx.getClickedPos();
-        if (ctx.getLevel().getBlockEntity(clickedPos)
-                instanceof SonarSignalSummatorBlockEntity summator) {
+        if (ctx.getLevel().getBlockEntity(clickedPos) instanceof SonarBlockEntity sonar) {
+            if (ctx.getPlayer() != null && ctx.getPlayer().isShiftKeyDown()
+                    && !sonar.hasDataLink()) return;
+            createEchoRadars$useSonar(ctx, sonar, cir);
+            return;
+        }
+        if (ctx.getLevel().getBlockEntity(clickedPos) instanceof SonarSignalSummatorBlockEntity summator) {
             createEchoRadars$useSummator(ctx, summator, cir);
             return;
         }
@@ -116,6 +122,112 @@ public abstract class DataLinkBlockItemMixin {
         SonarGlassNetworkManager.get(level).refreshNow(clickedPos, level.getGameTime());
         ModNetworking.sendGlassPulse(level, clickedPos, level.getGameTime());
         ctx.getPlayer().displayClientMessage(Component.translatable("display_link.success")
+                .withStyle(ChatFormatting.GREEN), true);
+        cir.setReturnValue(InteractionResult.SUCCESS);
+    }
+
+    private void createEchoRadars$useSonar(
+            UseOnContext ctx, SonarBlockEntity sonar,
+            CallbackInfoReturnable<InteractionResult> cir) {
+        if (ctx.getPlayer() == null) {
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        if (ctx.getLevel().isClientSide) {
+            cir.setReturnValue(InteractionResult.SUCCESS);
+            return;
+        }
+
+        ServerLevel level = (ServerLevel) ctx.getLevel();
+        if (ctx.getPlayer().isShiftKeyDown()) {
+            NetworkData.get(level).onEndpointRemoved(level, sonar.getBlockPos());
+            BlockPos linkPos = sonar.getDataLinkPos();
+            if (sonar.removeDataLink()) {
+                if (linkPos != null && level.getBlockState(linkPos)
+                        .is(org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_DATA_LINK.get())) {
+                    level.removeBlock(linkPos, false);
+                }
+                SonarSignalSummatorBlock.returnDataLink(level, sonar.getBlockPos(), ctx.getPlayer());
+                ctx.getPlayer().displayClientMessage(Component.translatable(
+                        "message.create_echo_radars.sonar.data_link_removed")
+                        .withStyle(ChatFormatting.YELLOW), true);
+            }
+            cir.setReturnValue(InteractionResult.SUCCESS);
+            return;
+        }
+        if (sonar.hasDataLink()) {
+            error(ctx, "message.create_echo_radars.sonar.data_link_already_installed");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        ItemStack stack = ctx.getItemInHand();
+        CompoundTag tag = stack.getOrDefault(DataComponents.CUSTOM_DATA,
+                CustomData.EMPTY).copyTag();
+        BlockPos filtererPos = NbtUtils.readBlockPos(tag,
+                "SelectedFiltererPos").orElse(null);
+        if (filtererPos == null || !(level.getBlockEntity(filtererPos)
+                instanceof NetworkFiltererBlockEntity filterer)) {
+            error(ctx, "message.create_echo_radars.sonar_glass.select_controller");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        double range = RadarConfig.server().radarLinkRange.get();
+        if (!PhysicsHandler.getWorldPos(level, sonar.getBlockPos()).getCenter().closerThan(
+                PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)) {
+            error(ctx, "display_link.too_far");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        NetworkData data = NetworkData.get(level);
+        if (data.getFiltererForEndpoint(level.dimension(), sonar.getBlockPos()) != null) {
+            error(ctx, "message.create_echo_radars.sonar.data_link_already_installed");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        NetworkData.Group group = data.getOrCreateGroup(level.dimension(), filtererPos);
+        if (!data.canAttachRadar(group, sonar.getBlockPos(), NetworkData.RadarKind.STATIONARY)) {
+            error(ctx, "create_radar.data_link.filter_attach_denied");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        BlockState clickedState = level.getBlockState(sonar.getBlockPos());
+        BlockPos placedPos = sonar.getBlockPos().relative(ctx.getClickedFace(),
+                clickedState.canBeReplaced() ? 0 : 1);
+        boolean waterlogged = level.getFluidState(placedPos).is(net.minecraft.tags.FluidTags.WATER);
+        InteractionResult placed = ((BlockItem) (Object) this).place(new BlockPlaceContext(ctx));
+        if (placed == InteractionResult.FAIL
+                || !(level.getBlockState(placedPos).getBlock() instanceof DataLinkBlock)) {
+            error(ctx, "create_radar.data_link.place_failed");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+        BlockState miniState = org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_DATA_LINK.get()
+                .defaultBlockState()
+                .setValue(SonarDataLinkBlock.FACING, ctx.getClickedFace())
+                .setValue(SonarDataLinkBlock.UPSIDE_DOWN, sonar.isUpsideDown())
+                .setValue(SonarDataLinkBlock.WATERLOGGED, waterlogged);
+        level.setBlock(placedPos, miniState, 3);
+
+        if (!sonar.installDataLink(filtererPos, placedPos)) {
+            level.removeBlock(placedPos, false);
+            if (!ctx.getPlayer().getAbilities().instabuild) {
+                SonarSignalSummatorBlock.returnDataLink(level, sonar.getBlockPos(), ctx.getPlayer());
+            }
+            error(ctx, "message.create_echo_radars.sonar.data_link_already_installed");
+            cir.setReturnValue(InteractionResult.FAIL);
+            return;
+        }
+
+        data.attachRadar(group, sonar.getBlockPos(), NetworkData.RadarKind.STATIONARY);
+        data.addDataLinkToGroup(group, placedPos, sonar.getBlockPos());
+        filterer.applyFiltersToNetwork();
+        stack.remove(DataComponents.CUSTOM_DATA);
+        ctx.getPlayer().displayClientMessage(Component.translatable(
+                "message.create_echo_radars.sonar.data_link_installed")
                 .withStyle(ChatFormatting.GREEN), true);
         cir.setReturnValue(InteractionResult.SUCCESS);
     }

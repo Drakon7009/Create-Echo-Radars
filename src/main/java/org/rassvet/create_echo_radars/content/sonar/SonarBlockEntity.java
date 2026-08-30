@@ -66,6 +66,10 @@ public class SonarBlockEntity extends KineticBlockEntity
     private float mechanicalAngle;
     private float previousMechanicalAngle;
     private BlockPos lastKnownNetworkPos;
+    @Nullable
+    private BlockPos dataLinkFiltererPos;
+    @Nullable
+    private BlockPos dataLinkPos;
 
     public SonarBlockEntity(BlockPos pos, BlockState state) {
         super(org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_BLOCK_ENTITY.get(), pos, state);
@@ -124,7 +128,10 @@ public class SonarBlockEntity extends KineticBlockEntity
     @Override
     public void initialize() {
         super.initialize();
-        if (level instanceof ServerLevel serverLevel) updateNetworkPosition(serverLevel);
+        if (level instanceof ServerLevel serverLevel) {
+            reconcileDataLinkPosition();
+            updateNetworkPosition(serverLevel);
+        }
     }
 
     private void updateNetworkPosition(ServerLevel serverLevel) {
@@ -496,6 +503,58 @@ public class SonarBlockEntity extends KineticBlockEntity
         // The radar keeps scanning; only the Create: Radars network association is removed.
     }
 
+    public boolean hasDataLink() {
+        return dataLinkFiltererPos != null;
+    }
+
+    @Nullable
+    public BlockPos getDataLinkFiltererPos() {
+        return dataLinkFiltererPos;
+    }
+
+    @Nullable
+    public BlockPos getDataLinkPos() {
+        return dataLinkPos;
+    }
+
+    public boolean installDataLink(BlockPos filtererPos, BlockPos linkPos) {
+        if (dataLinkFiltererPos != null) return false;
+        dataLinkFiltererPos = filtererPos.immutable();
+        dataLinkPos = linkPos.immutable();
+        setChanged();
+        sendData();
+        return true;
+    }
+
+    public boolean removeDataLink() {
+        if (dataLinkFiltererPos == null) return false;
+        dataLinkFiltererPos = null;
+        dataLinkPos = null;
+        setChanged();
+        sendData();
+        return true;
+    }
+
+    private void reconcileDataLinkPosition() {
+        if (level == null || dataLinkFiltererPos == null) return;
+        if (dataLinkPos != null && level.getBlockState(dataLinkPos)
+                .is(org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_DATA_LINK.get())) return;
+        for (Direction direction : Direction.values()) {
+            BlockPos candidate = worldPosition.relative(direction);
+            BlockState state = level.getBlockState(candidate);
+            if (state.is(org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_DATA_LINK.get())
+                    && state.getValue(SonarDataLinkBlock.FACING) == direction) {
+                dataLinkPos = candidate.immutable();
+                setChanged();
+                return;
+            }
+        }
+    }
+
+    public boolean ownsDataLink(BlockPos linkPos) {
+        return dataLinkPos != null && dataLinkPos.equals(linkPos);
+    }
+
     @Override
     protected void write(CompoundTag tag, HolderLookup.Provider registries, boolean clientPacket) {
         super.write(tag, registries, clientPacket);
@@ -506,6 +565,12 @@ public class SonarBlockEntity extends KineticBlockEntity
         tag.putBoolean("AutoHeight", autoHeight);
         tag.putFloat("MechanicalAngle", mechanicalAngle);
         tag.putLong("LastKnownNetworkPos", lastKnownNetworkPos.asLong());
+        if (dataLinkFiltererPos != null) {
+            tag.putLong("DataLinkFiltererPos", dataLinkFiltererPos.asLong());
+        }
+        if (dataLinkPos != null) {
+            tag.putLong("DataLinkPos", dataLinkPos.asLong());
+        }
     }
 
     @Override
@@ -525,6 +590,10 @@ public class SonarBlockEntity extends KineticBlockEntity
         if (tag.contains("LastKnownNetworkPos")) {
             lastKnownNetworkPos = BlockPos.of(tag.getLong("LastKnownNetworkPos"));
         }
+        dataLinkFiltererPos = tag.contains("DataLinkFiltererPos", Tag.TAG_LONG)
+                ? BlockPos.of(tag.getLong("DataLinkFiltererPos")) : null;
+        dataLinkPos = tag.contains("DataLinkPos", Tag.TAG_LONG)
+                ? BlockPos.of(tag.getLong("DataLinkPos")) : null;
     }
 
     @Override

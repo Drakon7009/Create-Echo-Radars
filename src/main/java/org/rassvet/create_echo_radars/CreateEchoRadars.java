@@ -21,6 +21,7 @@ import net.neoforged.neoforge.registries.DeferredHolder;
 import net.neoforged.neoforge.registries.DeferredRegister;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlock;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
+import org.rassvet.create_echo_radars.content.sonar.SonarDataLinkBlock;
 import org.rassvet.create_echo_radars.content.sonar.SonarMenu;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassBlock;
@@ -52,6 +53,10 @@ public final class CreateEchoRadars {
             BLOCKS.register("mechanical_scanning_sonar", () -> new SonarBlock(SonarType.MECHANICAL_IMAGING_C));
     public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarBlock> SIDE_SCAN_SONAR =
             BLOCKS.register("side_scan_sonar", () -> new SonarBlock(SonarType.SIDE_SCAN_D));
+    public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarDataLinkBlock> SONAR_DATA_LINK =
+            BLOCKS.register("sonar_data_link", () -> new SonarDataLinkBlock(
+                    BlockBehaviour.Properties.of().mapColor(MapColor.METAL)
+                            .strength(1.5f).sound(SoundType.METAL).noOcclusion()));
     public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarSignalSummatorBlock> SIGNAL_SUMMATOR =
             BLOCKS.register("signal_summator", () -> new SonarSignalSummatorBlock(
                     BlockBehaviour.Properties.of().mapColor(MapColor.METAL)
