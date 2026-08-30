@@ -1,1 +1,20 @@
-{"type":"minecraft:crafting_shapeless","category":"redstone","ingredients":[{"item":"create_echo_radars:sonar"},{"item":"minecraft:copper_ingot"}],"result":{"id":"create_echo_radars:echo_sounder","count":1}}
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "BSB",
+    "IRI",
+    " E "
+  ],
+  "key": {
+    "B": { "item": "create:brass_sheet" },
+    "S": { "item": "minecraft:sculk_sensor" },
+    "I": { "item": "create:brass_ingot" },
+    "R": { "item": "create:railway_casing" },
+    "E": { "item": "create:electron_tube" }
+  },
+  "result": {
+    "id": "create_echo_radars:echo_sounder",
+    "count": 1
+  }
+}

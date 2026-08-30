@@ -2,14 +2,16 @@
   "type": "minecraft:crafting_shaped",
   "category": "redstone",
   "pattern": [
-    "ICI",
-    "CRC",
-    "ICI"
+    "EPE",
+    "CIC",
+    "CRC"
   ],
   "key": {
-    "I": { "item": "minecraft:iron_ingot" },
+    "E": { "item": "create:electron_tube" },
+    "P": { "item": "create:precision_mechanism" },
     "C": { "item": "minecraft:copper_ingot" },
-    "R": { "item": "minecraft:redstone" }
+    "I": { "item": "create:industrial_iron_block" },
+    "R": { "item": "create:transmitter" }
   },
   "result": {
     "id": "create_echo_radars:signal_summator",

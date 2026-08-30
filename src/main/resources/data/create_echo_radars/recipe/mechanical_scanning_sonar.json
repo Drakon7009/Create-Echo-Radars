@@ -1,1 +1,21 @@
-{"type":"minecraft:crafting_shaped","category":"redstone","pattern":[" S "," R "," H "],"key":{"S":{"item":"create_echo_radars:sonar"},"R":{"item":"create:rotation_speed_controller"},"H":{"item":"create:shaft"}},"result":{"id":"create_echo_radars:mechanical_scanning_sonar","count":1}}
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "BSB",
+    " RE",
+    "IHI"
+  ],
+  "key": {
+    "B": { "item": "create:brass_sheet" },
+    "S": { "item": "minecraft:sculk_sensor" },
+    "R": { "item": "create:railway_casing" },
+    "E": { "item": "create:electron_tube" },
+    "I": { "item": "create:brass_ingot" },
+    "H": { "item": "create:shaft" }
+  },
+  "result": {
+    "id": "create_echo_radars:mechanical_scanning_sonar",
+    "count": 1
+  }
+}
