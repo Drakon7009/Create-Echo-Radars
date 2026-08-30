@@ -2,6 +2,7 @@ package org.rassvet.create_echo_radars.content.sonar;
 
 import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.datalink.DataLinkBlockItem;
+import com.happysg.radar.registry.ModBlocks;
 import com.mojang.serialization.MapCodec;
 import com.simibubi.create.AllItems;
 import com.simibubi.create.content.kinetics.base.KineticBlock;
@@ -86,6 +87,15 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {
+            if (!moving && level.getBlockEntity(pos) instanceof SonarBlockEntity sonar
+                    && sonar.hasDataLink()) {
+                BlockPos linkPos = sonar.getDataLinkPos();
+                sonar.removeDataLink();
+                if (linkPos != null && level.getBlockState(linkPos).is(CreateEchoRadars.SONAR_DATA_LINK.get())) {
+                    level.removeBlock(linkPos, false);
+                }
+                popResource(level, pos, new ItemStack(ModBlocks.RADAR_LINK.asItem()));
+            }
             NetworkData.get(serverLevel).onEndpointRemoved(serverLevel, pos);
         }
         super.onRemove(state, level, pos, newState, moving);
