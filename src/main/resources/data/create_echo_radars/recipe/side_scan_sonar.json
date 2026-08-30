@@ -1,1 +1,20 @@
-{"type":"minecraft:crafting_shaped","category":"redstone","pattern":[" C ","CSC"," C "],"key":{"C":{"item":"create:copper_sheet"},"S":{"item":"create_echo_radars:sonar"}},"result":{"id":"create_echo_radars:side_scan_sonar","count":1}}
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "redstone",
+  "pattern": [
+    "E E",
+    "BSB",
+    "IRI"
+  ],
+  "key": {
+    "E": { "item": "create:electron_tube" },
+    "B": { "item": "create:brass_sheet" },
+    "S": { "item": "minecraft:sculk_sensor" },
+    "I": { "item": "create:brass_ingot" },
+    "R": { "item": "create:railway_casing" }
+  },
+  "result": {
+    "id": "create_echo_radars:side_scan_sonar",
+    "count": 1
+  }
+}

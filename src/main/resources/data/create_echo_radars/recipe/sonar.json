@@ -2,15 +2,16 @@
   "type": "minecraft:crafting_shaped",
   "category": "redstone",
   "pattern": [
-    "CEC",
-    "CPC",
-    "CSC"
+    " E ",
+    "BSB",
+    "IRI"
   ],
   "key": {
-    "C": { "item": "minecraft:copper_ingot" },
     "E": { "item": "create:electron_tube" },
-    "P": { "item": "create:precision_mechanism" },
-    "S": { "item": "create:shaft" }
+    "B": { "item": "create:brass_sheet" },
+    "S": { "item": "minecraft:sculk_sensor" },
+    "I": { "item": "create:brass_ingot" },
+    "R": { "item": "create:railway_casing" }
   },
   "result": {
     "id": "create_echo_radars:sonar",
