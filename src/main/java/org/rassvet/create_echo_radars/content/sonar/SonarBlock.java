@@ -15,23 +15,29 @@ import net.minecraft.world.ItemInteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LevelAccessor;
 import net.minecraft.world.level.LevelReader;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.SimpleWaterloggedBlock;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.material.FluidState;
+import net.minecraft.world.level.material.Fluids;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.rassvet.create_echo_radars.CreateEchoRadars;
 
-public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
+public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity>, SimpleWaterloggedBlock {
     public static final net.minecraft.world.level.block.state.properties.DirectionProperty FACING =
             HorizontalDirectionalBlock.FACING;
     public static final BooleanProperty UPSIDE_DOWN = BooleanProperty.create("upside_down");
+    public static final BooleanProperty WATERLOGGED = BlockStateProperties.WATERLOGGED;
 
     private final SonarType sonarType;
     private final MapCodec<SonarBlock> codec;
@@ -42,7 +48,8 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
         this.codec = simpleCodec(properties -> new SonarBlock(sonarType));
         registerDefaultState(defaultBlockState()
                 .setValue(FACING, Direction.NORTH)
-                .setValue(UPSIDE_DOWN, false));
+                .setValue(UPSIDE_DOWN, false)
+                .setValue(WATERLOGGED, false));
     }
 
     public SonarType sonarType() {
@@ -56,7 +63,7 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(FACING, UPSIDE_DOWN);
+        builder.add(FACING, UPSIDE_DOWN, WATERLOGGED);
     }
 
     @Override
@@ -65,7 +72,24 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity> {
                 context.getClickedFace().getStepY(), context.isSecondaryUseActive());
         return defaultBlockState()
                 .setValue(FACING, context.getHorizontalDirection())
-                .setValue(UPSIDE_DOWN, upsideDown);
+                .setValue(UPSIDE_DOWN, upsideDown)
+                .setValue(WATERLOGGED, context.getLevel().getFluidState(
+                        context.getClickedPos()).is(Fluids.WATER));
+    }
+
+    @Override
+    protected FluidState getFluidState(BlockState state) {
+        return state.getValue(WATERLOGGED)
+                ? Fluids.WATER.getSource(false) : super.getFluidState(state);
+    }
+
+    @Override
+    protected BlockState updateShape(BlockState state, Direction direction, BlockState neighborState,
+                                     LevelAccessor level, BlockPos pos, BlockPos neighborPos) {
+        if (state.getValue(WATERLOGGED)) {
+            level.scheduleTick(pos, Fluids.WATER, Fluids.WATER.getTickDelay(level));
+        }
+        return super.updateShape(state, direction, neighborState, level, pos, neighborPos);
     }
 
     @Override

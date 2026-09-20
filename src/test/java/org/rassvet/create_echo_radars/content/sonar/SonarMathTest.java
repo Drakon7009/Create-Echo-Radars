@@ -625,6 +625,12 @@ class SonarMathTest {
     }
 
     @Test
+    void voxelDdaSkipsAnEmptyDistanceInterval() {
+        assertTrue(SonarVoxelDda.trace(0.5, 0.5, 0.5,
+                1, 0, 0, 4, 3).isEmpty());
+    }
+
+    @Test
     void sectionCollectionCoversEveryCrossedSection() {
         Set<Section> sections = traceSections(15.5, 15.5, 0.5,
                 Math.sqrt(0.5), Math.sqrt(0.5), 0, 0, 3);

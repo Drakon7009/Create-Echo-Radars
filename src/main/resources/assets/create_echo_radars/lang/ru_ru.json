@@ -149,5 +149,22 @@
   "message.create_echo_radars.sonar_glass_fallback": "Create: Echo Radars: включён совместимый рендер гидролокационного стекла (Veil недоступен: %s)",
   "message.create_echo_radars.sonar_glass_fallback_reason_missing": "Veil не установлен",
   "message.create_echo_radars.sonar_glass_fallback_reason_error": "ошибка %s",
-  "message.create_echo_radars.angle_preview_expired": "Время предпросмотра углов истекло"
+  "message.create_echo_radars.angle_preview_expired": "Время предпросмотра углов истекло",
+  "create_echo_radars.ponder.tag.echo_radars": "Create: Echo Radars",
+  "create_echo_radars.ponder.tag.echo_radars.description": "Сонары и дисплеи для подводных сетей обнаружения",
+  "create_echo_radars.ponder.sonar_types.header": "Установка и настройка сонара",
+  "create_echo_radars.ponder.mechanical_sonar.header": "Питание механического обзорного сонара",
+  "create_echo_radars.ponder.sonar_glass.header": "Вывод сигналов сонара на стекло",
+  "create_echo_radars.ponder.shared.sonar_types.water": "Установите сонар в носовой части. Его можно разместить прямо в воде; для работы он должен быть погружён.",
+  "create_echo_radars.ponder.shared.sonar_types.limits": "Каждый сонар имеет ограниченную дальность и угол обзора.",
+  "create_echo_radars.ponder.shared.sonar_types.configure": "Нажмите ПКМ по сонару, чтобы настроить горизонтальный и вертикальный углы обзора.",
+  "create_echo_radars.ponder.shared.sonar_types.angle_range": "Большие углы охватывают больше воды, но при слишком широком обзоре максимальная дальность обнаружения уменьшается.",
+  "create_echo_radars.ponder.shared.mechanical.intro": "Механический обзорный сонар сканирует всё пространство вокруг себя.",
+  "create_echo_radars.ponder.shared.mechanical.power": "Он сканирует, только когда к валу на его основании подведено вращение.",
+  "create_echo_radars.ponder.shared.mechanical.configure_network": "Настройте его через ПКМ и подключите к контроллеру Create: Radars так же, как остальные сонары.",
+  "create_echo_radars.ponder.shared.glass.single": "К гидролокационному стеклу можно напрямую подключить только один передатчик данных, поэтому так оно показывает только один сигнал.",
+  "create_echo_radars.ponder.shared.glass.remove_direct": "Перед объединением нескольких сигналов снимите передатчик данных со стекла.",
+  "create_echo_radars.ponder.shared.glass.select": "Нажмите ПКМ по стеклу сумматором. Всё выбранное окно подсветится.",
+  "create_echo_radars.ponder.shared.glass.place": "Установите выбранный сумматор не дальше 16 блоков от стекла.",
+  "create_echo_radars.ponder.shared.glass.inputs": "Вставляйте передатчики данных в свободные гнёзда: для этого стекла можно объединить до четырёх сигналов."
 }

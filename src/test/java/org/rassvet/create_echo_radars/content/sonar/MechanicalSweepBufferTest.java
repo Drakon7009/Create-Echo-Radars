@@ -10,8 +10,24 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertNotSame;
 
 class MechanicalSweepBufferTest {
+    @Test
+    void reusesFlattenedVisibleValuesUntilDisplayChanges() {
+        MechanicalSweepBuffer<String, String> buffer = buffer();
+        buffer.replaceSector(0, Map.of("zero", "zero"), 0);
+
+        var first = buffer.visibleValues();
+        assertSame(first, buffer.visibleValues());
+
+        buffer.replaceSector(2, Map.of("two", "two"), 0);
+        var second = buffer.visibleValues();
+        assertNotSame(first, second);
+        assertSame(second, buffer.visibleValues());
+    }
+
     @Test
     void forwardSweepClearsOnlyCrossedSectorsAndAtomicallyReplacesPendingData() {
         MechanicalSweepBuffer<String, String> buffer = buffer();

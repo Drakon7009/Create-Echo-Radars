@@ -246,10 +246,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         PoseStack poseStack = graphics.pose();
         graphics.flush();
         poseStack.pushPose();
-        float sectorYaw = previewYaw(sonar);
-        // Keep the forward-looking sector on the visible right-hand side of the block.
-        if (sonar.getSonarType() == SonarType.FORWARD_LOOKING_F) sectorYaw += 180.0f;
-        applyPreviewTransform(poseStack, sectorYaw, sonar.getSonarType());
+        applyPreviewTransform(poseStack, previewYaw(sonar), sonar.getSonarType());
         Matrix4f matrix = poseStack.last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -278,12 +275,6 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         if (sideScanWorldTransformIsUpsideDown(sonar)) {
             poseStack.translate(0.5, 0.5, 0.5);
             poseStack.mulPose(Axis.XP.rotationDegrees(180.0f));
-            poseStack.translate(-0.5, -0.5, -0.5);
-        }
-        if (sonar.getSonarType() == SonarType.FORWARD_LOOKING_F) {
-            // Turn only the model so its red emitter faces the separately positioned sector.
-            poseStack.translate(0.5, 0.5, 0.5);
-            poseStack.mulPose(Axis.YP.rotationDegrees(180.0f));
             poseStack.translate(-0.5, -0.5, -0.5);
         }
 

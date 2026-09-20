@@ -9,6 +9,7 @@
     "GuidedFuzeTorpedoMixin",
     "MonitorBlockEntityMixin",
     "MonitorInputHandlerMixin",
+    "NetworkFiltererBlockEntityMixin",
     "RadarScanningBlockBehaviorMixin"
   ],
   "client": [

@@ -37,12 +37,14 @@ public final class SonarGlassBlockEntity extends BlockEntity {
 
     private void updateNetworkPosition(net.minecraft.server.level.ServerLevel serverLevel) {
         if (lastKnownNetworkPos.equals(worldPosition)) return;
+        BlockPos previousPosition = lastKnownNetworkPos;
+        SonarGlassNetworkManager.get(serverLevel).remapGlassTarget(
+                previousPosition, worldPosition, serverLevel.getGameTime());
         NetworkData data = NetworkData.get(serverLevel);
-        if (data.updateMonitorPosition(serverLevel.dimension(),
-                lastKnownNetworkPos, worldPosition)) {
-            lastKnownNetworkPos = worldPosition.immutable();
-            setChanged();
-        }
+        data.updateMonitorPosition(serverLevel.dimension(),
+                previousPosition, worldPosition);
+        lastKnownNetworkPos = worldPosition.immutable();
+        setChanged();
     }
 
     public @Nullable SonarGlassState currentState() {

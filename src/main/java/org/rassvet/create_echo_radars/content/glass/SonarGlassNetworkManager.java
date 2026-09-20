@@ -16,12 +16,16 @@ import java.util.TreeMap;
 import java.util.Collections;
 import java.util.WeakHashMap;
 import org.jetbrains.annotations.Nullable;
+import org.rassvet.create_echo_radars.content.summator.SummatorLinkRemap;
 
 public final class SonarGlassNetworkManager {
+    private static final long REMAP_RETENTION_TICKS = 200;
     private static final Map<ServerLevel, SonarGlassNetworkManager> INSTANCES = new WeakHashMap<>();
     private final Map<Long, State> states = new HashMap<>();
     private final Set<SonarSignalSummatorBlockEntity> summators =
             Collections.newSetFromMap(new WeakHashMap<>());
+    private final Map<Long, SummatorLinkRemap.Move> glassMoves = new HashMap<>();
+    private final Map<Long, SummatorLinkRemap.Move> filtererMoves = new HashMap<>();
 
     private SonarGlassNetworkManager() {}
 
@@ -33,6 +37,8 @@ public final class SonarGlassNetworkManager {
 
     public void tick(ServerLevel level) {
         long now = level.getGameTime();
+        pruneMoves(glassMoves, now);
+        pruneMoves(filtererMoves, now);
         Set<Long> active = new HashSet<>();
         Map<Long, TreeMap<Long, SonarBlockEntity>> sourcesByDisplay = new HashMap<>();
         Map<Long, SonarGlassBlockEntity> displays = new HashMap<>();
@@ -51,6 +57,7 @@ public final class SonarGlassNetworkManager {
 
         summators.removeIf(summator -> summator.isRemoved()
                 || summator.getLevel() != level);
+        applyMoves(now);
         for (SonarSignalSummatorBlockEntity summator : List.copyOf(summators)) {
             if (!summator.hasValidGlassTarget(level)) continue;
             SonarGlassBlockEntity display = displayEntity(
@@ -123,6 +130,56 @@ public final class SonarGlassNetworkManager {
 
     public void unregisterSummator(SonarSignalSummatorBlockEntity summator) {
         summators.remove(summator);
+    }
+
+    public void remapGlassTarget(BlockPos oldPos, BlockPos newPos, long now) {
+        recordMove(glassMoves, oldPos, newPos, now);
+    }
+
+    public void remapFilterer(BlockPos oldPos, BlockPos newPos, long now) {
+        recordMove(filtererMoves, oldPos, newPos, now);
+    }
+
+    private void applyMoves(long now) {
+        for (SonarSignalSummatorBlockEntity summator : List.copyOf(summators)) {
+            summator.applyPositionRemaps(glassMoves, filtererMoves, now);
+        }
+    }
+
+    private static void recordMove(Map<Long, SummatorLinkRemap.Move> moves,
+                                   BlockPos oldPos, BlockPos newPos, long now) {
+        if (oldPos.equals(newPos)) return;
+        moves.put(oldPos.asLong(), new SummatorLinkRemap.Move(
+                newPos.asLong(), now, now + REMAP_RETENTION_TICKS));
+    }
+
+    private static void pruneMoves(Map<Long, SummatorLinkRemap.Move> moves,
+                                   long now) {
+        moves.values().removeIf(move -> move.expiresAt() < now);
+    }
+
+    public static @Nullable BlockPos canonicalDisplayPosition(
+            ServerLevel level, BlockPos target) {
+        if (!SonarGlass.isGlass(level, target)) return null;
+        if (level.getBlockEntity(target) instanceof SonarGlassBlockEntity) {
+            return target.immutable();
+        }
+        BlockPos best = null;
+        long bestDistance = Long.MAX_VALUE;
+        for (BlockPos pos : SonarGlassNetwork.find(level, target).blocks()) {
+            if (!(level.getBlockEntity(pos) instanceof SonarGlassBlockEntity)) continue;
+            long dx = (long) pos.getX() - target.getX();
+            long dy = (long) pos.getY() - target.getY();
+            long dz = (long) pos.getZ() - target.getZ();
+            long distance = dx * dx + dy * dy + dz * dz;
+            if (distance < bestDistance
+                    || distance == bestDistance && (best == null
+                    || pos.asLong() < best.asLong())) {
+                best = pos.immutable();
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
     private static void addSource(
