@@ -11,6 +11,8 @@ import org.rassvet.create_echo_radars.content.glass.SonarGlass;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassNetwork;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassNetworkManager;
 import org.rassvet.create_echo_radars.content.sonar.SonarScanManager;
+import org.rassvet.create_echo_radars.performance.PerformanceTestBuild;
+import org.rassvet.create_echo_radars.performance.PerformanceTestManager;
 
 public final class CommonEvents {
     private CommonEvents() {}
@@ -19,12 +21,16 @@ public final class CommonEvents {
         NeoForge.EVENT_BUS.addListener(CommonEvents::levelTick);
         NeoForge.EVENT_BUS.addListener(CommonEvents::playerLoggedIn);
         NeoForge.EVENT_BUS.addListener(CommonEvents::blockPlaced);
+        if (PerformanceTestBuild.enabled()) {
+            NeoForge.EVENT_BUS.addListener(PerformanceTestManager::registerCommands);
+        }
     }
 
     private static void levelTick(LevelTickEvent.Post event) {
         if (event.getLevel() instanceof ServerLevel level) {
             SonarScanManager.get(level).tick();
             SonarGlassNetworkManager.get(level).tick(level);
+            if (PerformanceTestBuild.enabled()) PerformanceTestManager.tick(level);
         }
     }
 

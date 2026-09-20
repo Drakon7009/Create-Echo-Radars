@@ -24,7 +24,9 @@ public abstract class MonitorRendererMixin {
                                                int light, int overlay, CallbackInfo ci) {
         SonarMonitorSnapshot snapshot =
                 ((SonarMonitorExtension) monitor).createEchoRadars$getSonarSnapshot();
-        if (snapshot == null || !monitor.isController() || !monitor.isLinked()) return;
+        SonarMonitorExtension extension = (SonarMonitorExtension) monitor;
+        if (snapshot == null || !monitor.isController()
+                || (!monitor.isLinked() && !extension.createEchoRadars$isSyntheticSnapshot())) return;
         SonarMonitorRenderer.render(monitor, snapshot, poseStack, buffers, partialTick);
         ci.cancel();
     }

@@ -429,20 +429,23 @@ public final class SonarScanManager {
                     chunkReader.prepareSnapshot(sections, usedChunks);
             if (snapshot.isEmpty()) return;
 
-            List<SableSonarCompat.RaySegment> sableRays = new ArrayList<>(traceRays.size());
-            for (TraceRay ray : traceRays) {
-                sableRays.add(new SableSonarCompat.RaySegment(
-                        new Vec3(ray.originX, ray.originY, ray.originZ),
-                        new Vec3(ray.directionX, ray.directionY, ray.directionZ),
-                        ray.startDistance, ray.endDistance));
+            SableSonarCompat.Snapshot sableSnapshot = SableSonarCompat.emptySnapshot();
+            if (SableSonarCompat.hasLoadedSubLevels(level)) {
+                List<SableSonarCompat.RaySegment> sableRays = new ArrayList<>(traceRays.size());
+                for (TraceRay ray : traceRays) {
+                    sableRays.add(new SableSonarCompat.RaySegment(
+                            ray.originX, ray.originY, ray.originZ,
+                            ray.directionX, ray.directionY, ray.directionZ,
+                            ray.startDistance, ray.endDistance));
+                }
+                sableSnapshot = SableSonarCompat.capture(level,
+                        scanDescriptor.origin, new SonarOrientation(scanDescriptor.forward,
+                                scanDescriptor.right, scanDescriptor.up),
+                        scanDescriptor.range,
+                        scanDescriptor.type == SonarType.SIDE_SCAN_D ? 180 : scanDescriptor.sector,
+                        scanDescriptor.type == SonarType.SIDE_SCAN_D ? 180 : scanDescriptor.verticalSector,
+                        sableRays);
             }
-            SableSonarCompat.Snapshot sableSnapshot = SableSonarCompat.capture(level,
-                    scanDescriptor.origin, new SonarOrientation(scanDescriptor.forward,
-                            scanDescriptor.right, scanDescriptor.up),
-                    scanDescriptor.range,
-                    scanDescriptor.type == SonarType.SIDE_SCAN_D ? 180 : scanDescriptor.sector,
-                    scanDescriptor.type == SonarType.SIDE_SCAN_D ? 180 : scanDescriptor.verticalSector,
-                    sableRays);
 
             long batchId = ++nextBatchId;
             activeBatchId = batchId;
@@ -813,9 +816,10 @@ public final class SonarScanManager {
             SonarTraceExecutor.Range range
     ) {
         List<SonarTraceExecutor.RayResult> results = new ArrayList<>(range.endExclusive() - range.startInclusive());
+        WorldRayVisitor worldVisitor = new WorldRayVisitor(snapshot.cursor());
         for (int i = range.startInclusive(); i < range.endExclusive(); i++) {
             TraceRay ray = rays.get(i);
-            MarchResult result = traceRay(ray, snapshot, sableSnapshot);
+            MarchResult result = traceRay(ray, worldVisitor, sableSnapshot);
             if (result.waiting) continue;
             results.add(new SonarTraceExecutor.RayResult(ray.rayIndex, result.distance, result.hit,
                     result.airBoundary, result.incidence, result.state));
@@ -826,10 +830,11 @@ public final class SonarScanManager {
     private record TimedRange(List<SonarTraceExecutor.RayResult> results,
                               long workerNanos, int rays) {}
 
-    private static MarchResult traceRay(TraceRay ray, SonarChunkReader.SonarWorldSnapshot snapshot,
+    private static MarchResult traceRay(TraceRay ray, WorldRayVisitor worldVisitor,
                                         SableSonarCompat.Snapshot sableSnapshot) {
-        MarchResult worldResult = traceWorldRay(ray, snapshot);
+        MarchResult worldResult = worldVisitor.trace(ray);
         if (worldResult.waiting) return worldResult;
+        if (sableSnapshot.isEmpty()) return worldResult;
 
         Vec3 origin = new Vec3(ray.originX, ray.originY, ray.originZ);
         Vec3 direction = new Vec3(ray.directionX, ray.directionY, ray.directionZ);
@@ -844,28 +849,44 @@ public final class SonarScanManager {
         return worldResult;
     }
 
-    private static MarchResult traceWorldRay(TraceRay ray, SonarChunkReader.SonarWorldSnapshot snapshot) {
-        MarchState state = new MarchState();
-        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
-        SonarVoxelDda.traceCells(ray.originX, ray.originY, ray.originZ,
-                ray.directionX, ray.directionY, ray.directionZ, ray.startDistance, ray.endDistance,
-                (x, y, z, distance, incidence) -> {
-                    pos.set(x, y, z);
-                    SonarChunkReader.Cell cell = snapshot.probe(pos);
-                    if (cell.type() == SonarChunkReader.CellType.PENDING
-                            || cell.type() == SonarChunkReader.CellType.UNKNOWN) {
-                        state.result = MarchResult.waiting(ray.startDistance);
-                        return false;
-                    }
-                    if (cell.type() == SonarChunkReader.CellType.OBSTACLE
-                            || cell.type() == SonarChunkReader.CellType.AIR_BOUNDARY) {
-                        state.result = MarchResult.hit(distance, incidence,
-                                cell.type() == SonarChunkReader.CellType.AIR_BOUNDARY, cell.state());
-                        return false;
-                    }
-                    return true;
-                });
-        return state.result == null ? MarchResult.clear(ray.endDistance) : state.result;
+    private static final class WorldRayVisitor implements SonarSectionSkippingDda.Visitor {
+        private final SonarChunkReader.SonarWorldSnapshot.Cursor cursor;
+        private MarchResult result;
+        private double start;
+
+        private WorldRayVisitor(SonarChunkReader.SonarWorldSnapshot.Cursor cursor) {
+            this.cursor = cursor;
+        }
+
+        private MarchResult trace(TraceRay ray) {
+            result = null;
+            start = ray.startDistance;
+            SonarSectionSkippingDda.trace(ray.originX, ray.originY, ray.originZ,
+                    ray.directionX, ray.directionY, ray.directionZ, start, ray.endDistance, this);
+            return result == null ? MarchResult.clear(ray.endDistance) : result;
+        }
+
+        @Override
+        public boolean skipSection(int x, int y, int z) {
+            return cursor.isWaterSection(x, y, z);
+        }
+
+        @Override
+        public boolean visit(int x, int y, int z, double distance, double incidence) {
+            SonarChunkReader.Cell cell = cursor.probe(x, y, z);
+            if (cell.type() == SonarChunkReader.CellType.PENDING
+                    || cell.type() == SonarChunkReader.CellType.UNKNOWN) {
+                result = MarchResult.waiting(start);
+                return false;
+            }
+            if (cell.type() == SonarChunkReader.CellType.OBSTACLE
+                    || cell.type() == SonarChunkReader.CellType.AIR_BOUNDARY) {
+                result = MarchResult.hit(distance, incidence,
+                        cell.type() == SonarChunkReader.CellType.AIR_BOUNDARY, cell.state());
+                return false;
+            }
+            return true;
+        }
     }
 
     private static float materialReflectivity(BlockState state) {
@@ -1035,10 +1056,6 @@ public final class SonarScanManager {
         float verticalAngularResolution() {
             return verticalAngularResolution == Float.MAX_VALUE ? 0 : verticalAngularResolution;
         }
-    }
-
-    private static final class MarchState {
-        private MarchResult result;
     }
 
     private record MarchResult(boolean hit, boolean waiting, boolean airBoundary,

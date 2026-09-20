@@ -72,15 +72,49 @@ final class SonarTraceSupport {
     }
 
     static AABB segmentBounds(Vec3 origin, Vec3 direction, double startDistance, double endDistance) {
-        Vec3 start = origin.add(direction.scale(startDistance));
-        Vec3 end = origin.add(direction.scale(endDistance));
-        return new AABB(Math.min(start.x, end.x), Math.min(start.y, end.y), Math.min(start.z, end.z),
-                Math.max(start.x, end.x), Math.max(start.y, end.y), Math.max(start.z, end.z));
+        return segmentBounds(origin.x, origin.y, origin.z,
+                direction.x, direction.y, direction.z, startDistance, endDistance);
+    }
+
+    static AABB segmentBounds(double originX, double originY, double originZ,
+                              double directionX, double directionY, double directionZ,
+                              double startDistance, double endDistance) {
+        double startX = originX + directionX * startDistance;
+        double startY = originY + directionY * startDistance;
+        double startZ = originZ + directionZ * startDistance;
+        double endX = originX + directionX * endDistance;
+        double endY = originY + directionY * endDistance;
+        double endZ = originZ + directionZ * endDistance;
+        return new AABB(Math.min(startX, endX), Math.min(startY, endY), Math.min(startZ, endZ),
+                Math.max(startX, endX), Math.max(startY, endY), Math.max(startZ, endZ));
     }
 
     static AABB expand(AABB current, AABB next) {
         if (current == null) return next;
         return current.minmax(next);
+    }
+
+    /** Conservative slab test, including parallel rays and origins inside the box. */
+    static boolean segmentIntersectsBox(AABB box, double ox, double oy, double oz,
+                                        double dx, double dy, double dz, double from, double to) {
+        double padding = 1.0e-3;
+        if (dx == 0) {
+            if (ox < box.minX - padding || ox > box.maxX + padding) return false;
+        } else {
+            double a = (box.minX - padding - ox) / dx, b = (box.maxX + padding - ox) / dx;
+            from = Math.max(from, Math.min(a,b)); to = Math.min(to, Math.max(a,b));
+            if (from > to) return false;
+        }
+        if (dy == 0) {
+            if (oy < box.minY - padding || oy > box.maxY + padding) return false;
+        } else {
+            double a = (box.minY - padding - oy) / dy, b = (box.maxY + padding - oy) / dy;
+            from = Math.max(from, Math.min(a,b)); to = Math.min(to, Math.max(a,b));
+            if (from > to) return false;
+        }
+        if (dz == 0) return oz >= box.minZ - padding && oz <= box.maxZ + padding;
+        double a = (box.minZ - padding - oz) / dz, b = (box.maxZ + padding - oz) / dz;
+        return Math.max(from, Math.min(a,b)) <= Math.min(to, Math.max(a,b));
     }
 
     private static double square(double value) {

@@ -38,16 +38,19 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     private int createEchoRadars$monitorWidth = 1;
     @Unique
     private int createEchoRadars$monitorHeight = 1;
+    @Unique
+    private boolean createEchoRadars$syntheticSnapshot;
 
     @Inject(method = "write", at = @At("TAIL"))
     private void createEchoRadars$writeSonar(CompoundTag tag, HolderLookup.Provider registries,
                                              boolean clientPacket, CallbackInfo ci) {
         tag.putInt("CreateEchoRadarsMonitorWidth", createEchoRadars$monitorWidth);
         tag.putInt("CreateEchoRadarsMonitorHeight", createEchoRadars$monitorHeight);
+        tag.putBoolean("CreateEchoRadarsSyntheticSnapshot", createEchoRadars$syntheticSnapshot);
         MonitorBlockEntity self = (MonitorBlockEntity) (Object) this;
         if (!clientPacket || !self.isController()) return;
-        if (createEchoRadars$sonarSnapshot != null
-                && java.util.Objects.equals(createEchoRadars$sonarSnapshotPos, radarPos)) {
+        if (createEchoRadars$sonarSnapshot != null && (createEchoRadars$syntheticSnapshot
+                || java.util.Objects.equals(createEchoRadars$sonarSnapshotPos, radarPos))) {
             if (createEchoRadars$encodedSnapshotSource != createEchoRadars$sonarSnapshot) {
                 createEchoRadars$encodedSnapshotSource = createEchoRadars$sonarSnapshot;
                 createEchoRadars$encodedSnapshot = createEchoRadars$sonarSnapshot.save();
@@ -64,11 +67,22 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
                 ? Math.max(1, tag.getInt("CreateEchoRadarsMonitorWidth")) : fallbackSize;
         createEchoRadars$monitorHeight = tag.contains("CreateEchoRadarsMonitorHeight", Tag.TAG_INT)
                 ? Math.max(1, tag.getInt("CreateEchoRadarsMonitorHeight")) : fallbackSize;
+        createEchoRadars$syntheticSnapshot = clientPacket
+                && tag.getBoolean("CreateEchoRadarsSyntheticSnapshot");
         if (clientPacket && tag.contains("CreateEchoRadarsSonar", Tag.TAG_COMPOUND)) {
             createEchoRadars$sonarSnapshot =
                     SonarMonitorSnapshot.load(tag.getCompound("CreateEchoRadarsSonar"));
         } else if (clientPacket) {
             createEchoRadars$sonarSnapshot = null;
+        }
+    }
+
+    @Inject(method = "tick", at = @At("HEAD"), cancellable = true)
+    private void createEchoRadars$skipSyntheticServerTick(CallbackInfo ci) {
+        MonitorBlockEntity self = (MonitorBlockEntity) (Object) this;
+        if (createEchoRadars$syntheticSnapshot && self.getLevel() != null
+                && !self.getLevel().isClientSide) {
+            ci.cancel();
         }
     }
 
@@ -97,6 +111,7 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     private void createEchoRadars$refreshServerSnapshot() {
         MonitorBlockEntity self = (MonitorBlockEntity) (Object) this;
         if (!(self.getLevel() instanceof ServerLevel level) || !self.isController()) return;
+        if (createEchoRadars$syntheticSnapshot) return;
         SonarScanManager manager = SonarScanManager.get(level);
         self.getRadar().ifPresent(radar -> {
             if (radar instanceof SonarBlockEntity sonar) manager.touch(sonar);
@@ -132,6 +147,21 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     @Override
     public void createEchoRadars$setSonarSnapshot(SonarMonitorSnapshot snapshot) {
         createEchoRadars$sonarSnapshot = snapshot;
+        createEchoRadars$syntheticSnapshot = false;
+    }
+
+    @Override
+    public boolean createEchoRadars$isSyntheticSnapshot() {
+        return createEchoRadars$syntheticSnapshot;
+    }
+
+    @Override
+    public void createEchoRadars$setSyntheticSnapshot(SonarMonitorSnapshot snapshot) {
+        createEchoRadars$sonarSnapshot = snapshot;
+        createEchoRadars$syntheticSnapshot = snapshot != null;
+        createEchoRadars$sonarSnapshotPos = null;
+        createEchoRadars$encodedSnapshotSource = null;
+        createEchoRadars$encodedSnapshot = null;
     }
 
     @Override

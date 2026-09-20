@@ -187,8 +187,40 @@ public final class SonarChunkReader {
     public static final class SonarWorldSnapshot {
         private final Map<Long, ChunkSnapshot> chunks;
 
-        private SonarWorldSnapshot(Map<Long, ChunkSnapshot> chunks) {
+        SonarWorldSnapshot(Map<Long, ChunkSnapshot> chunks) {
             this.chunks = chunks;
+        }
+
+        /** One cursor per worker range; never shared between tracing threads. */
+        public Cursor cursor() {
+            return new Cursor();
+        }
+
+        public final class Cursor {
+            private int sectionX = Integer.MIN_VALUE, sectionY = Integer.MIN_VALUE, sectionZ = Integer.MIN_VALUE;
+            private SectionSnapshot section;
+            private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+
+            private void select(int x, int y, int z) {
+                if (x == sectionX && y == sectionY && z == sectionZ) return;
+                sectionX = x; sectionY = y; sectionZ = z;
+                ChunkSnapshot chunk = chunks.get(ChunkPos.asLong(x, z));
+                section = chunk == null || !chunk.available() ? null
+                        : chunk.sections().getOrDefault(y, SectionSnapshot.air());
+            }
+
+            public boolean isWaterSection(int x, int y, int z) {
+                select(x, y, z);
+                return section != null && section.allWater();
+            }
+
+            public Cell probe(int x, int y, int z) {
+                select(x >> 4, y >> 4, z >> 4);
+                if (section == null) return Cell.unknown();
+                BlockState state = section.get(x & 15, y & 15, z & 15);
+                pos.set(x, y, z);
+                return classify(state, pos);
+            }
         }
 
         Cell probe(BlockPos pos) {
@@ -198,29 +230,47 @@ public final class SonarChunkReader {
             BlockState state = chunk.getBlockState(pos);
             return state == null ? Cell.unknown() : classify(state, pos);
         }
+
+        Cell probe(int x, int y, int z, BlockPos.MutableBlockPos pos) {
+            ChunkSnapshot chunk = chunks.get(ChunkPos.asLong(
+                    Math.floorDiv(x, 16), Math.floorDiv(z, 16)));
+            if (chunk == null) return Cell.unknown();
+            BlockState state = chunk.getBlockState(x, y, z);
+            if (state == null) return Cell.unknown();
+            pos.set(x, y, z);
+            return classify(state, pos);
+        }
     }
 
-    private record ChunkSnapshot(Map<Integer, SectionSnapshot> sections, boolean available) {
+    record ChunkSnapshot(Map<Integer, SectionSnapshot> sections, boolean available) {
         private static final ChunkSnapshot UNAVAILABLE = new ChunkSnapshot(Map.of(), false);
 
         BlockState getBlockState(BlockPos pos) {
+            return getBlockState(pos.getX(), pos.getY(), pos.getZ());
+        }
+
+        BlockState getBlockState(int x, int y, int z) {
             if (!available) return null;
-            SectionSnapshot states = sections.get(Math.floorDiv(pos.getY(), 16));
+            SectionSnapshot states = sections.get(Math.floorDiv(y, 16));
             if (states == null) return Blocks.AIR.defaultBlockState();
-            return states.get(pos.getX() & 15, pos.getY() & 15, pos.getZ() & 15);
+            return states.get(x & 15, y & 15, z & 15);
         }
     }
 
-    private record SectionSnapshot(PalettedContainerRO<BlockState> states, boolean allAir) {
+    record SectionSnapshot(PalettedContainerRO<BlockState> states, boolean allAir, boolean allWater) {
         private static final BlockState AIR = Blocks.AIR.defaultBlockState();
-        private static final SectionSnapshot AIR_SECTION = new SectionSnapshot(null, true);
+        private static final SectionSnapshot AIR_SECTION = new SectionSnapshot(null, true, false);
 
         static SectionSnapshot copy(PalettedContainer<BlockState> source) {
-            return new SectionSnapshot(source.copy(), false);
+            return decoded(source.copy());
         }
 
         static SectionSnapshot decoded(PalettedContainerRO<BlockState> source) {
-            return new SectionSnapshot(source, false);
+            // Only vanilla water is proven transparent independent of position.
+            // Waterlogged/modded blocks must still run collision classification.
+            return new SectionSnapshot(source, false,
+                    !source.maybeHas(state -> !state.is(Blocks.WATER)
+                            || !state.getFluidState().is(FluidTags.WATER)));
         }
 
         static SectionSnapshot air() {

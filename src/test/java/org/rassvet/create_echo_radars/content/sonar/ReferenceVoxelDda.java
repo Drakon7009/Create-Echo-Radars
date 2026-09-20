@@ -3,8 +3,8 @@ package org.rassvet.create_echo_radars.content.sonar;
 import java.util.ArrayList;
 import java.util.List;
 
-public final class SonarVoxelDda {
-    private SonarVoxelDda() {}
+final class ReferenceVoxelDda {
+    private ReferenceVoxelDda() {}
 
     public static List<Cell> trace(double originX, double originY, double originZ,
                                    double directionX, double directionY, double directionZ,
