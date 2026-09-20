@@ -149,5 +149,22 @@
   "message.create_echo_radars.sonar_glass_fallback": "Create: Echo Radars: sonar glass compatibility renderer enabled (Veil unavailable: %s)",
   "message.create_echo_radars.sonar_glass_fallback_reason_missing": "Veil is not installed",
   "message.create_echo_radars.sonar_glass_fallback_reason_error": "%s error",
-  "message.create_echo_radars.angle_preview_expired": "Sonar angle preview expired"
+  "message.create_echo_radars.angle_preview_expired": "Sonar angle preview expired",
+  "create_echo_radars.ponder.tag.echo_radars": "Create: Echo Radars",
+  "create_echo_radars.ponder.tag.echo_radars.description": "Sonars and displays for underwater detection networks",
+  "create_echo_radars.ponder.sonar_types.header": "Installing and Configuring a Sonar",
+  "create_echo_radars.ponder.mechanical_sonar.header": "Powering the Mechanical Imaging Sonar",
+  "create_echo_radars.ponder.sonar_glass.header": "Displaying Sonar Signals on Glass",
+  "create_echo_radars.ponder.shared.sonar_types.water": "Install the sonar at the bow. It can be placed directly in water and must be submerged to operate.",
+  "create_echo_radars.ponder.shared.sonar_types.limits": "Every sonar has a limited detection range and field of view.",
+  "create_echo_radars.ponder.shared.sonar_types.configure": "Right-click the sonar to adjust its horizontal and vertical viewing angles.",
+  "create_echo_radars.ponder.shared.sonar_types.angle_range": "Wider viewing angles cover more water, but angles set too high reduce the maximum detection range.",
+  "create_echo_radars.ponder.shared.mechanical.intro": "The Mechanical Imaging Sonar scans the full area around itself.",
+  "create_echo_radars.ponder.shared.mechanical.power": "It only scans while rotational force is supplied through the shaft on its base.",
+  "create_echo_radars.ponder.shared.mechanical.configure_network": "Configure it with right-click and connect it to a Create: Radars controller like any other sonar.",
+  "create_echo_radars.ponder.shared.glass.single": "Sonar glass accepts only one direct Data Transmitter, so it can display only one signal this way.",
+  "create_echo_radars.ponder.shared.glass.remove_direct": "Remove the direct Data Transmitter before combining several signals with a Signal Summator.",
+  "create_echo_radars.ponder.shared.glass.select": "Right-click the glass with a Signal Summator. The whole selected window will light up.",
+  "create_echo_radars.ponder.shared.glass.place": "Place the selected Signal Summator no farther than 16 blocks from the glass.",
+  "create_echo_radars.ponder.shared.glass.inputs": "Insert Data Transmitters into free sockets: up to four signals are combined for this glass window."
 }

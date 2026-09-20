@@ -306,6 +306,7 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     public boolean isEmitterSubmerged() {
         if (level == null) return false;
+        if (level.getFluidState(worldPosition).is(FluidTags.WATER)) return true;
         if (getSonarType() != SonarType.SIDE_SCAN_D) {
             return level.getFluidState(BlockPos.containing(emitterPosition())).is(FluidTags.WATER);
         }

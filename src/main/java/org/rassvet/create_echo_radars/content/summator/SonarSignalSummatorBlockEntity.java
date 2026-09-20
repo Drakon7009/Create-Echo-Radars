@@ -22,6 +22,7 @@ import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 public final class SonarSignalSummatorBlockEntity extends BlockEntity {
     private final BlockPos[] filterers = new BlockPos[SonarSignalSummatorBlock.SLOT_COUNT];
@@ -37,6 +38,11 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
     }
 
     public void setGlassTarget(BlockPos target) {
+        if (level instanceof ServerLevel serverLevel) {
+            BlockPos canonical = SonarGlassNetworkManager.canonicalDisplayPosition(
+                    serverLevel, target);
+            if (canonical != null) target = canonical;
+        }
         glassTarget = target.immutable();
         sync();
     }
@@ -89,6 +95,34 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
             }
         }
         return List.copyOf(sonars);
+    }
+
+    public void applyPositionRemaps(
+            Map<Long, SummatorLinkRemap.Move> glassMoves,
+            Map<Long, SummatorLinkRemap.Move> filtererMoves, long now) {
+        boolean changed = false;
+        if (glassTarget != null) {
+            long resolved = SummatorLinkRemap.resolve(
+                    glassTarget.asLong(), glassMoves, now);
+            if (resolved != glassTarget.asLong()) {
+                glassTarget = BlockPos.of(resolved);
+                changed = true;
+            }
+        }
+        for (int slot = 0; slot < filterers.length; slot++) {
+            BlockPos filterer = filterers[slot];
+            if (filterer == null) continue;
+            long resolved = SummatorLinkRemap.resolve(
+                    filterer.asLong(), filtererMoves, now);
+            if (resolved != filterer.asLong()) {
+                filterers[slot] = BlockPos.of(resolved);
+                changed = true;
+            }
+        }
+        if (changed) {
+            sync();
+            refreshOutput();
+        }
     }
 
     private void refreshOutput() {
@@ -159,7 +193,16 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
     public void onLoad() {
         super.onLoad();
         if (level instanceof ServerLevel serverLevel) {
-            SonarGlassNetworkManager.get(serverLevel).registerSummator(this);
+            SonarGlassNetworkManager manager = SonarGlassNetworkManager.get(serverLevel);
+            manager.registerSummator(this);
+            if (glassTarget != null) {
+                BlockPos canonical = SonarGlassNetworkManager.canonicalDisplayPosition(
+                        serverLevel, glassTarget);
+                if (canonical != null && !canonical.equals(glassTarget)) {
+                    glassTarget = canonical;
+                    sync();
+                }
+            }
         }
     }
 
