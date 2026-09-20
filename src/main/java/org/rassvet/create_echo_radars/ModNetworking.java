@@ -13,6 +13,8 @@ import org.rassvet.create_echo_radars.config.ServerConfig;
 import org.rassvet.create_echo_radars.config.SyncedServerConfig;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
+import org.rassvet.create_echo_radars.performance.PerformanceNetworking;
+import org.rassvet.create_echo_radars.performance.PerformanceTestBuild;
 
 public final class ModNetworking {
     private ModNetworking() {}
@@ -22,7 +24,8 @@ public final class ModNetworking {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("17").playToServer(UpdateSonarSettingsPayload.TYPE,
+        var registrar = event.registrar("17");
+        registrar.playToServer(UpdateSonarSettingsPayload.TYPE,
                         UpdateSonarSettingsPayload.STREAM_CODEC, UpdateSonarSettingsPayload::handle)
                 .playToServer(UpdateServerConfigPayload.TYPE,
                         UpdateServerConfigPayload.STREAM_CODEC, UpdateServerConfigPayload::handle)
@@ -30,6 +33,7 @@ public final class ModNetworking {
                         ServerConfigSnapshotPayload.STREAM_CODEC, ServerConfigSnapshotPayload::handle)
                 .playToClient(SonarGlassPulsePayload.TYPE,
                         SonarGlassPulsePayload.STREAM_CODEC, SonarGlassPulsePayload::handle);
+        if (PerformanceTestBuild.enabled()) PerformanceNetworking.register(registrar);
     }
 
     public static void sendSettings(BlockPos pos, int range, int horizontalSector,

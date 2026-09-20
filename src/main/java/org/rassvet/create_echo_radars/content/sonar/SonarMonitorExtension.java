@@ -5,6 +5,10 @@ public interface SonarMonitorExtension {
 
     void createEchoRadars$setSonarSnapshot(SonarMonitorSnapshot snapshot);
 
+    boolean createEchoRadars$isSyntheticSnapshot();
+
+    void createEchoRadars$setSyntheticSnapshot(SonarMonitorSnapshot snapshot);
+
     SonarMonitorDimensions createEchoRadars$getMonitorDimensions();
 
     void createEchoRadars$setMonitorDimensions(int width, int height);

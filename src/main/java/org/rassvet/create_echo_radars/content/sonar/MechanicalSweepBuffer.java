@@ -21,6 +21,8 @@ public final class MechanicalSweepBuffer<K, V> {
     private final int sectorCount;
     private final Map<Integer, PendingSector<K, V>> pending = new HashMap<>();
     private final Map<Integer, Map<K, VisibleValue<V>>> visible = new HashMap<>();
+    private List<VisibleValue<V>> cachedVisibleValues = List.of();
+    private boolean visibleValuesDirty = true;
     private float lastSweep = Float.NaN;
     private double lastAdvanceTick = Double.NaN;
 
@@ -63,8 +65,9 @@ public final class MechanicalSweepBuffer<K, V> {
             return;
         }
         if (travelled > 1.0e-4f) {
-            visible.entrySet().removeIf(entry -> SonarRotation.crossedAngle(
+            boolean removedVisible = visible.entrySet().removeIf(entry -> SonarRotation.crossedAngle(
                     previousSweep, currentSweep, sectorAngle(entry.getKey()), angularSpeed));
+            if (removedVisible) visibleValuesDirty = true;
             Iterator<Map.Entry<Integer, PendingSector<K, V>>> iterator = pending.entrySet().iterator();
             while (iterator.hasNext()) {
                 PendingSector<K, V> sector = iterator.next().getValue();
@@ -87,18 +90,22 @@ public final class MechanicalSweepBuffer<K, V> {
     public void replaceSector(float angle, Map<K, V> values, double activatedTick) {
         int sector = sectorIndex(angle);
         if (values.isEmpty()) {
-            visible.remove(sector);
+            if (visible.remove(sector) != null) visibleValuesDirty = true;
             return;
         }
         Map<K, VisibleValue<V>> replacement = new HashMap<>();
         values.forEach((key, value) -> replacement.put(key, new VisibleValue<>(value, activatedTick)));
         visible.put(sector, Map.copyOf(replacement));
+        visibleValuesDirty = true;
     }
 
-    public Collection<VisibleValue<V>> visibleValues() {
+    public List<VisibleValue<V>> visibleValues() {
+        if (!visibleValuesDirty) return cachedVisibleValues;
         List<VisibleValue<V>> result = new ArrayList<>();
         for (Map<K, VisibleValue<V>> sector : visible.values()) result.addAll(sector.values());
-        return List.copyOf(result);
+        cachedVisibleValues = List.copyOf(result);
+        visibleValuesDirty = false;
+        return cachedVisibleValues;
     }
 
     public int visibleSectorCount() {
@@ -112,6 +119,8 @@ public final class MechanicalSweepBuffer<K, V> {
     public void reset() {
         pending.clear();
         visible.clear();
+        cachedVisibleValues = List.of();
+        visibleValuesDirty = false;
         lastSweep = Float.NaN;
         lastAdvanceTick = Double.NaN;
     }

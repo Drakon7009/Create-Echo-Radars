@@ -162,6 +162,37 @@ tasks.named("test") {
     useJUnitPlatform()
 }
 
+// Snapshot integration checks need Minecraft classes; ordinary unit tests stay isolated.
+sourceSets {
+    traceTest {
+        compileClasspath += sourceSets.main.output + sourceSets.main.compileClasspath + configurations.testCompileClasspath
+        runtimeClasspath += output + compileClasspath + configurations.testRuntimeClasspath
+    }
+}
+tasks.register('traceTest', Test) {
+    testClassesDirs = sourceSets.traceTest.output.classesDirs
+    classpath = sourceSets.traceTest.runtimeClasspath + fileTree('build/moddev/artifacts') {
+        include '*-client-extra-aka-minecraft-resources.jar'
+    }
+    useJUnitPlatform()
+    systemProperty 'echo.traceBenchmark', providers.gradleProperty('traceBenchmark').getOrElse('false')
+}
+tasks.named('check') {
+    dependsOn tasks.named('traceTest')
+}
+
+tasks.register("performanceTestJar", Jar) {
+    group = "build"
+    description = "Builds the opt-in performance-test mod JAR."
+    dependsOn tasks.named("classes")
+    archiveClassifier = "performance-test"
+    from sourceSets.main.output
+    from("src/performanceTest/resources")
+    manifest {
+        attributes("Create-Echo-Radars-Performance-Test": "true")
+    }
+}
+
 configurations.testRuntimeClasspath {
     exclude group: "com.simibubi.create"
     exclude group: "net.createmod.ponder"

@@ -8,6 +8,8 @@ import net.minecraft.core.SectionPos;
 import net.minecraft.world.level.ClipContext;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.PalettedContainerRO;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
@@ -56,6 +58,19 @@ public final class SableSonarCompat {
         }
     }
 
+    public static boolean hasLoadedSubLevels(Level level) {
+        if (!ModList.get().isLoaded(SABLE_MOD_ID)) return false;
+        try {
+            return LoadedSable.hasLoadedSubLevels(level);
+        } catch (LinkageError | RuntimeException ignored) {
+            return false;
+        }
+    }
+
+    public static Snapshot emptySnapshot() {
+        return Snapshot.EMPTY;
+    }
+
     public static List<VisibilityTarget> visibilityTargets(Level level, Vec3 sourcePosition) {
         if (!ModList.get().isLoaded(SABLE_MOD_ID)) return List.of();
         try {
@@ -65,7 +80,22 @@ public final class SableSonarCompat {
         }
     }
 
-    public record RaySegment(Vec3 origin, Vec3 direction, double startDistance, double endDistance) {}
+    public record RaySegment(double originX, double originY, double originZ,
+                             double directionX, double directionY, double directionZ,
+                             double startDistance, double endDistance) {
+        public RaySegment(Vec3 origin, Vec3 direction, double startDistance, double endDistance) {
+            this(origin.x, origin.y, origin.z, direction.x, direction.y, direction.z,
+                    startDistance, endDistance);
+        }
+
+        public Vec3 origin() {
+            return new Vec3(originX, originY, originZ);
+        }
+
+        public Vec3 direction() {
+            return new Vec3(directionX, directionY, directionZ);
+        }
+    }
 
     public record VisibilityTarget(String id, Vec3 position) {}
 
@@ -77,13 +107,19 @@ public final class SableSonarCompat {
             this.subLevels = subLevels;
         }
 
+        public boolean isEmpty() {
+            return subLevels.isEmpty();
+        }
+
         public Optional<Hit> trace(Vec3 origin, Vec3 direction, double startDistance, double endDistance) {
             if (subLevels.isEmpty()) return Optional.empty();
-            AABB rayBounds = SonarTraceSupport.segmentBounds(origin, direction, startDistance, endDistance).inflate(1.0e-3);
             Hit best = null;
             for (SubLevelTrace subLevel : subLevels) {
-                if (!subLevel.globalBounds().intersects(rayBounds)) continue;
-                Optional<Hit> hit = subLevel.trace(origin, direction, startDistance, endDistance);
+                double limit = best == null ? endDistance : Math.min(endDistance, best.distance());
+                if (!SonarTraceSupport.segmentIntersectsBox(subLevel.globalBounds(),
+                        origin.x, origin.y, origin.z, direction.x, direction.y, direction.z,
+                        startDistance, limit)) continue;
+                Optional<Hit> hit = subLevel.trace(origin, direction, startDistance, limit);
                 if (hit.isPresent() && (best == null || hit.get().distance() < best.distance())) {
                     best = hit.get();
                 }
@@ -100,10 +136,14 @@ public final class SableSonarCompat {
         Optional<Hit> trace(Vec3 origin, Vec3 direction, double startDistance, double endDistance);
     }
 
-    private record ObstacleCell(BlockState state) {}
-
     private static final class LoadedSable {
         private LoadedSable() {}
+
+        private static boolean hasLoadedSubLevels(Level level) {
+            dev.ryanhcode.sable.api.sublevel.SubLevelContainer container =
+                    dev.ryanhcode.sable.api.sublevel.SubLevelContainer.getContainer(level);
+            return container != null && container.getLoadedCount() > 0;
+        }
 
         private static void ignoreTrackedSubLevel(ClipContext context, String trackId) {
             if (!(context instanceof dev.ryanhcode.sable.mixinterface.clip_overwrite.ClipContextExtension extension)) {
@@ -143,7 +183,9 @@ public final class SableSonarCompat {
             AABB batchBounds = null;
             for (RaySegment ray : rays) {
                 batchBounds = SonarTraceSupport.expand(batchBounds,
-                        SonarTraceSupport.segmentBounds(ray.origin(), ray.direction(),
+                        SonarTraceSupport.segmentBounds(
+                                ray.originX(), ray.originY(), ray.originZ(),
+                                ray.directionX(), ray.directionY(), ray.directionZ(),
                                 ray.startDistance(), ray.endDistance()));
             }
             if (batchBounds == null) return Snapshot.EMPTY;
@@ -158,7 +200,7 @@ public final class SableSonarCompat {
                         horizontalSector, verticalSector, range)) continue;
 
                 SubLevelSnapshot snapshot = copySubLevel(subLevel, rays);
-                if (!snapshot.obstacles().isEmpty()) snapshots.add(snapshot);
+                if (!snapshot.sections().isEmpty()) snapshots.add(snapshot);
             }
             return snapshots.isEmpty() ? Snapshot.EMPTY : new Snapshot(List.copyOf(snapshots));
         }
@@ -173,13 +215,12 @@ public final class SableSonarCompat {
                 return new SubLevelSnapshot(pose, subLevel.boundingBox().toMojang(), Map.of());
             }
 
-            LongSet sections = collectLocalSections(pose, rays);
+            LongSet sections = collectLocalSections(pose, subLevel.boundingBox().toMojang(), rays);
             if (sections.isEmpty()) {
                 return new SubLevelSnapshot(pose, subLevel.boundingBox().toMojang(), Map.of());
             }
 
-            Map<Long, ObstacleCell> obstacles = new HashMap<>();
-            BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+            Map<Long, SectionSnapshot> sectionsByPosition = new HashMap<>();
             for (LongIterator iterator = sections.iterator(); iterator.hasNext();) {
                 long section = iterator.nextLong();
                 int sectionX = SectionPos.x(section);
@@ -196,30 +237,30 @@ public final class SableSonarCompat {
                 int sectionMinZ = Math.max(plotBounds.minZ(), sectionZ << 4);
                 int sectionMaxZ = Math.min(plotBounds.maxZ(), (sectionZ << 4) + 15);
                 if (sectionMinX > sectionMaxX || sectionMinY > sectionMaxY || sectionMinZ > sectionMaxZ) continue;
-
-                int minY = Math.max(sectionMinY, chunk.getMinBuildHeight());
-                int maxY = Math.min(sectionMaxY, chunk.getMaxBuildHeight() - 1);
-                for (int y = minY; y <= maxY; y++) {
-                    for (int z = sectionMinZ; z <= sectionMaxZ; z++) {
-                        for (int x = sectionMinX; x <= sectionMaxX; x++) {
-                            pos.set(x, y, z);
-                            SonarChunkReader.Cell cell = SonarChunkReader.classify(chunk.getBlockState(pos), pos);
-                            if (cell.type() == SonarChunkReader.CellType.OBSTACLE) {
-                                obstacles.put(BlockPos.asLong(x, y, z), new ObstacleCell(cell.state()));
-                            }
-                        }
-                    }
-                }
+                int sectionIndex = chunk.getSectionIndexFromSectionY(sectionY);
+                if (sectionIndex < 0 || sectionIndex >= chunk.getSections().length) continue;
+                var states = chunk.getSections()[sectionIndex].getStates();
+                if (!states.maybeHas(state -> !state.is(Blocks.AIR) && !state.is(Blocks.CAVE_AIR)
+                        && !state.is(Blocks.VOID_AIR) && !state.is(Blocks.WATER))) continue;
+                sectionsByPosition.put(section, new SectionSnapshot(states.copy(),
+                        sectionMinX, sectionMinY, sectionMinZ, sectionMaxX, sectionMaxY, sectionMaxZ));
             }
-            return new SubLevelSnapshot(pose, subLevel.boundingBox().toMojang(), Map.copyOf(obstacles));
+            return new SubLevelSnapshot(pose, subLevel.boundingBox().toMojang(),
+                    Map.copyOf(sectionsByPosition));
         }
 
         private static LongSet collectLocalSections(
-                dev.ryanhcode.sable.companion.math.Pose3d pose, Collection<RaySegment> rays) {
+                dev.ryanhcode.sable.companion.math.Pose3d pose, AABB bounds, Collection<RaySegment> rays) {
             LongSet sections = new LongOpenHashSet();
             for (RaySegment ray : rays) {
-                Vec3 worldStart = ray.origin().add(ray.direction().scale(ray.startDistance()));
-                Vec3 worldEnd = ray.origin().add(ray.direction().scale(ray.endDistance()));
+                if (!SonarTraceSupport.segmentIntersectsBox(bounds,
+                        ray.originX(), ray.originY(), ray.originZ(),
+                        ray.directionX(), ray.directionY(), ray.directionZ(),
+                        ray.startDistance(), ray.endDistance())) continue;
+                Vec3 origin = ray.origin();
+                Vec3 direction = ray.direction();
+                Vec3 worldStart = origin.add(direction.scale(ray.startDistance()));
+                Vec3 worldEnd = origin.add(direction.scale(ray.endDistance()));
                 Vec3 localStart = pose.transformPositionInverse(worldStart);
                 Vec3 localEnd = pose.transformPositionInverse(worldEnd);
                 Vec3 localDelta = localEnd.subtract(localStart);
@@ -236,7 +277,7 @@ public final class SableSonarCompat {
 
     private record SubLevelSnapshot(dev.ryanhcode.sable.companion.math.Pose3d pose,
                                     AABB globalBounds,
-                                    Map<Long, ObstacleCell> obstacles) implements SubLevelTrace {
+                                    Map<Long, SectionSnapshot> sections) implements SubLevelTrace {
         public Optional<Hit> trace(Vec3 origin, Vec3 direction, double startDistance, double endDistance) {
             Vec3 worldStart = origin.add(direction.scale(startDistance));
             Vec3 worldEnd = origin.add(direction.scale(endDistance));
@@ -247,26 +288,55 @@ public final class SableSonarCompat {
             if (localLength <= EPSILON) return Optional.empty();
             Vec3 localDirection = localDelta.scale(1 / localLength);
 
-            TraceState state = new TraceState();
-            SonarVoxelDda.traceCells(localStart.x, localStart.y, localStart.z,
+            SubLevelVisitor visitor = new SubLevelVisitor(sections, pose, localStart, localDirection,
+                    origin, direction, startDistance, endDistance);
+            SonarSectionSkippingDda.trace(localStart.x, localStart.y, localStart.z,
                     localDirection.x, localDirection.y, localDirection.z, 0, localLength,
-                    (x, y, z, localDistance, incidence) -> {
-                        ObstacleCell cell = obstacles.get(BlockPos.asLong(x, y, z));
-                        if (cell == null) return true;
-                        Vec3 localHit = localStart.add(localDirection.scale(localDistance));
-                        Vec3 worldHit = pose.transformPosition(localHit);
-                        double worldDistance = worldHit.subtract(origin).dot(direction);
-                        if (worldDistance < startDistance - EPSILON || worldDistance > endDistance + EPSILON) {
-                            return true;
-                        }
-                        state.hit = new Hit(Math.max(startDistance, worldDistance), incidence, cell.state());
-                        return false;
-                    });
-            return Optional.ofNullable(state.hit);
+                    visitor);
+            return Optional.ofNullable(visitor.hit);
         }
     }
 
-    private static final class TraceState {
+    private record SectionSnapshot(PalettedContainerRO<BlockState> states,
+                                    int minX, int minY, int minZ, int maxX, int maxY, int maxZ) {
+        boolean contains(int x, int y, int z) {
+            return x >= minX && x <= maxX && y >= minY && y <= maxY && z >= minZ && z <= maxZ;
+        }
+    }
+
+    private static final class SubLevelVisitor implements SonarSectionSkippingDda.Visitor {
+        private final Map<Long, SectionSnapshot> sections;
+        private final dev.ryanhcode.sable.companion.math.Pose3d pose;
+        private final Vec3 localStart, localDirection, origin, direction;
+        private final double from, to;
+        private final BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        private SectionSnapshot section;
         private Hit hit;
+
+        private SubLevelVisitor(Map<Long, SectionSnapshot> sections,
+                                dev.ryanhcode.sable.companion.math.Pose3d pose,
+                                Vec3 localStart, Vec3 localDirection, Vec3 origin, Vec3 direction,
+                                double from, double to) {
+            this.sections = sections; this.pose = pose;
+            this.localStart = localStart; this.localDirection = localDirection;
+            this.origin = origin; this.direction = direction; this.from = from; this.to = to;
+        }
+
+        public boolean skipSection(int x, int y, int z) {
+            section = sections.get(SectionPos.asLong(x,y,z));
+            return section == null;
+        }
+
+        public boolean visit(int x, int y, int z, double distance, double incidence) {
+            if (section == null || !section.contains(x,y,z)) return true;
+            BlockState block = section.states().get(x & 15, y & 15, z & 15);
+            pos.set(x,y,z);
+            if (SonarChunkReader.classify(block,pos).type() != SonarChunkReader.CellType.OBSTACLE) return true;
+            Vec3 worldHit = pose.transformPosition(localStart.add(localDirection.scale(distance)));
+            double worldDistance = worldHit.subtract(origin).dot(direction);
+            if (worldDistance < from - EPSILON || worldDistance > to + EPSILON) return true;
+            hit = new Hit(Math.max(from,worldDistance),incidence,block);
+            return false;
+        }
     }
 }

@@ -18,6 +18,8 @@ import org.rassvet.create_echo_radars.client.SonarGlassVanillaDepthRenderer;
 import org.rassvet.create_echo_radars.client.SonarSignalSummatorRenderer;
 import org.rassvet.create_echo_radars.client.SonarSignalSummatorOutline;
 import org.rassvet.create_echo_radars.compat.fusion.SonarSlopeFrameConnectionPredicate;
+import org.rassvet.create_echo_radars.performance.PerformanceClientTelemetry;
+import org.rassvet.create_echo_radars.performance.PerformanceTestBuild;
 
 public final class ClientEvents {
     private ClientEvents() {}
@@ -38,6 +40,9 @@ public final class ClientEvents {
             NeoForge.EVENT_BUS.addListener(SonarDebugRenderer::onRenderLevel);
             NeoForge.EVENT_BUS.addListener(SonarGlassOverlay::onRenderLevel);
             NeoForge.EVENT_BUS.addListener(SonarSignalSummatorOutline::onClientTick);
+            if (PerformanceTestBuild.enabled()) {
+                NeoForge.EVENT_BUS.addListener(PerformanceClientTelemetry::onFrame);
+            }
         }
     }
 
