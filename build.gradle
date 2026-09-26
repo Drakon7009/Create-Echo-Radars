@@ -122,6 +122,7 @@ dependencies {
         transitive = false
     }
     implementation("net.createmod.ponder:ponder-neoforge:${ponder_version}+mc${minecraft_version}")
+    compileOnly("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}")
     runtimeOnly("dev.engine-room.flywheel:flywheel-neoforge-${minecraft_version}:${flywheel_version}")
     implementation("com.tterrag.registrate:Registrate:${registrate_version}")
 
@@ -156,6 +157,11 @@ dependencies {
 
     testImplementation(platform("org.junit:junit-bom:5.11.4"))
     testImplementation("org.junit.jupiter:junit-jupiter")
+}
+
+// Create bundles Registrate; a second dev-runtime module prevents the client from launching.
+configurations.runtimeClasspath {
+    exclude group: "com.tterrag.registrate"
 }
 
 tasks.named("test") {

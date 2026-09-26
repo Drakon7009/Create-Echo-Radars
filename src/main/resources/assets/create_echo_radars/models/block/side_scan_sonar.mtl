@@ -1,5 +1,0 @@
-# Converted from Blockbench for Create Echo Radars
-newmtl texture_0
-map_Kd create_echo_radars:block/side_scan_sonar_texture_0
-newmtl texture_1
-map_Kd create_echo_radars:block/side_scan_sonar_texture_1

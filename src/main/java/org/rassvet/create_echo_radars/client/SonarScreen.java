@@ -38,6 +38,8 @@ import java.util.function.BooleanSupplier;
 public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
             CreateEchoRadars.MOD_ID, "textures/gui/sonar_settings.png");
+    private static final ResourceLocation BLOCKER_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+            CreateEchoRadars.MOD_ID, "textures/gui/sonar_settings_blocker.png");
     private static final int TEXTURE_WIDTH = 256;
     private static final int TEXTURE_HEIGHT = 512;
     private static final int THREE_SLIDER_PANEL_V = 256;
@@ -47,6 +49,8 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private static final int THREE_SLIDER_SCREEN_HEIGHT = 154;
     private static final int SLIDER_WIDTH = 199;
     private static final int SLIDER_HEIGHT = 26;
+    private static final int BLOCKER_WIDTH = 189;
+    private static final int BLOCKER_HEIGHT = 16;
     /** The preview is angular only. Its length must never be derived from sonar range. */
     private static final double PREVIEW_CONE_LENGTH = 1.55;
     /** Center of the red forward-looking emitter in sonar.obj, relative to the block center. */
@@ -67,6 +71,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private IconToggleButton autoHeightButton;
     private IconToggleButton anglePreviewButton;
     private IntSlider draggedSlider;
+    private boolean settingsSent;
 
     public SonarScreen(SonarMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -139,14 +144,18 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
                 }));
 
         addRenderableWidget(new ApplyButton(leftPos + 192, footerY, 18, 19,
-                Component.translatable("gui.create_echo_radars.apply"), () -> {
-                    captureDraft();
-                    if (menu.getSonar() != null) {
-                        ModNetworking.sendSettings(menu.getSonar().getBlockPos(), draftRange,
-                                draftSector, draftVerticalSector, draftTiltAngle, draftAutoHeight);
-                    }
-                    onClose();
-                }));
+                Component.translatable("gui.create_echo_radars.apply"), this::onClose));
+    }
+
+    @Override
+    public void onClose() {
+        if (!settingsSent && draftInitialized && menu.getSonar() != null) {
+            settingsSent = true;
+            captureDraft();
+            ModNetworking.sendSettings(menu.getSonar().getBlockPos(), draftRange,
+                    draftSector, draftVerticalSector, draftTiltAngle, draftAutoHeight);
+        }
+        super.onClose();
     }
 
     private void captureDraft() {
@@ -246,7 +255,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         PoseStack poseStack = graphics.pose();
         graphics.flush();
         poseStack.pushPose();
-        applyPreviewTransform(poseStack, previewYaw(sonar), sonar.getSonarType());
+        applyPreviewTransform(poseStack, previewYaw(sonar.getSonarType()), sonar.getSonarType());
         Matrix4f matrix = poseStack.last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -267,23 +276,18 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private void renderSonarModel(GuiGraphics graphics, float partialTick) {
         if (minecraft == null || menu.getSonar() == null) return;
         SonarBlockEntity sonar = menu.getSonar();
-        BlockState state = sonar.getBlockState();
+        BlockState state = previewBlockState(sonar);
         PoseStack poseStack = graphics.pose();
         graphics.flush();
         poseStack.pushPose();
-        applyPreviewTransform(poseStack, previewYaw(sonar), sonar.getSonarType());
-        if (sideScanWorldTransformIsUpsideDown(sonar)) {
-            poseStack.translate(0.5, 0.5, 0.5);
-            poseStack.mulPose(Axis.XP.rotationDegrees(180.0f));
-            poseStack.translate(-0.5, -0.5, -0.5);
-        }
+        applyPreviewTransform(poseStack, previewYaw(sonar.getSonarType()), sonar.getSonarType());
 
         RenderSystem.enableDepthTest();
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
         minecraft.getBlockRenderer().renderSingleBlock(state, poseStack, buffers,
                 LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
         if (sonar.getSonarType() == SonarType.MECHANICAL_IMAGING_C) {
-            renderMechanicalRotatingPart(sonar, partialTick, poseStack, buffers);
+            renderMechanicalRotatingPart(sonar, state, partialTick, poseStack, buffers);
         }
         buffers.endBatch();
         poseStack.popPose();
@@ -302,19 +306,27 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         poseStack.translate(-0.5, -0.5, -0.5);
     }
 
-    private static float previewYaw(SonarBlockEntity sonar) {
-        Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
-        double heading = Math.toDegrees(Math.atan2(facing.getStepX(), facing.getStepZ()));
-        return (float) (45.0 - heading);
+    private static BlockState previewBlockState(SonarBlockEntity sonar) {
+        SonarType type = sonar.getSonarType();
+        boolean upsideDown = type == SonarType.FORWARD_LOOKING_F
+                || type == SonarType.MECHANICAL_IMAGING_C;
+        return sonar.getBlockState().getBlock().defaultBlockState()
+                .setValue(SonarBlock.FACING, Direction.NORTH)
+                .setValue(SonarBlock.UPSIDE_DOWN, upsideDown);
+    }
+
+    private static float previewYaw(SonarType type) {
+        return type == SonarType.FORWARD_LOOKING_F ? 45.0f : -135.0f;
     }
 
     private static PreviewPose previewPose(SonarBlockEntity sonar, int tiltAngle) {
-        Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
+        BlockState state = previewBlockState(sonar);
+        Direction facing = state.getValue(SonarBlock.FACING);
         SonarOrientation base = new SonarOrientation(
                 Vec3.atLowerCornerOf(facing.getNormal()),
                 Vec3.atLowerCornerOf(facing.getClockWise().getNormal()),
                 new Vec3(0, 1, 0));
-        if (sonar.isUpsideDown() ^ sideScanWorldTransformIsUpsideDown(sonar)) {
+        if (state.getValue(SonarBlock.UPSIDE_DOWN)) {
             base = new SonarOrientation(base.forward().scale(-1),
                     base.right(), base.up().scale(-1));
         }
@@ -339,31 +351,21 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         return new PreviewPose(origin, orientation);
     }
 
-    private static boolean sideScanWorldTransformIsUpsideDown(SonarBlockEntity sonar) {
-        return sonar.getSonarType() == SonarType.SIDE_SCAN_D
-                && SonarOrientation.of(sonar).up().y < -1.0e-3;
-    }
-
-    private void renderMechanicalRotatingPart(SonarBlockEntity sonar, float partialTick,
-                                              PoseStack poseStack, MultiBufferSource.BufferSource buffers) {
+    private void renderMechanicalRotatingPart(SonarBlockEntity sonar, BlockState state,
+                                              float partialTick, PoseStack poseStack,
+                                              MultiBufferSource.BufferSource buffers) {
         BakedModel rotatingModel = minecraft.getModelManager()
                 .getModel(MechanicalSonarRenderer.ROTATING_MODEL);
-        Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
-        float placementAngle = switch (facing) {
-            case EAST -> 90;
-            case SOUTH -> 180;
-            case WEST -> 270;
-            default -> 0;
-        };
         poseStack.pushPose();
         poseStack.translate(0.5, 0.5, 0.5);
-        poseStack.mulPose(Axis.YP.rotationDegrees(-placementAngle));
-        if (sonar.isUpsideDown()) poseStack.mulPose(Axis.XP.rotationDegrees(180));
+        if (state.getValue(SonarBlock.UPSIDE_DOWN)) {
+            poseStack.mulPose(Axis.XP.rotationDegrees(180.0f));
+        }
         poseStack.mulPose(Axis.YP.rotationDegrees(-sonar.getMechanicalAngle(partialTick)));
         poseStack.translate(-0.5, -0.5, -0.5);
         minecraft.getBlockRenderer().getModelRenderer().renderModel(
                 poseStack.last(), buffers.getBuffer(RenderType.cutout()),
-                sonar.getBlockState(), rotatingModel, 1.0f, 1.0f, 1.0f,
+                state, rotatingModel, 1.0f, 1.0f, 1.0f,
                 LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
                 ModelData.EMPTY, RenderType.cutout());
         poseStack.popPose();
@@ -442,6 +444,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         private final int max;
         private final String suffix;
         private final Runnable onValueChanged;
+        private int availableMaximum;
         private boolean dragging;
 
         private IntSlider(int x, int y, int width, String key, int min, int max,
@@ -451,6 +454,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
             this.key = key;
             this.min = min;
             this.max = max;
+            this.availableMaximum = max;
             this.suffix = suffix;
             this.onValueChanged = onValueChanged;
             updateMessage();
@@ -462,6 +466,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
 
         private void clampTo(int maximumValue) {
             int clampedMaximum = Mth.clamp(maximumValue, min, max);
+            availableMaximum = clampedMaximum;
             if (intValue() <= clampedMaximum) return;
             value = (clampedMaximum - min) / (double) (max - min);
             updateMessage();
@@ -508,6 +513,15 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             graphics.blit(TEXTURE, getX(), getY(), 8, 23,
                     SLIDER_WIDTH, SLIDER_HEIGHT, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+            if (availableMaximum < max) {
+                int limitHandleX = getX() + 5 + (int) Math.round(
+                        (availableMaximum - min) * (width - 15) / (double) (max - min));
+                int blockedStart = limitHandleX + 5;
+                int blockedWidth = getX() + 5 + BLOCKER_WIDTH - blockedStart;
+                graphics.blit(BLOCKER_TEXTURE, blockedStart, getY() + 5,
+                        blockedStart - (getX() + 5), 0,
+                        blockedWidth, BLOCKER_HEIGHT, BLOCKER_WIDTH, BLOCKER_HEIGHT);
+            }
             int handleX = getX() + 5 + (int) Math.round(value * (width - 15));
             int sourceY = isHoveredOrFocused() ? 208 : 187;
             graphics.blit(TEXTURE, handleX, getY() + 4, 0, sourceY,
