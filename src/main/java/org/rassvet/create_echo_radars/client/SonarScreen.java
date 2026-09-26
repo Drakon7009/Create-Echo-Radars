@@ -255,7 +255,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         PoseStack poseStack = graphics.pose();
         graphics.flush();
         poseStack.pushPose();
-        applyPreviewTransform(poseStack, previewYaw(sonar), sonar.getSonarType());
+        applyPreviewTransform(poseStack, previewYaw(sonar.getSonarType()), sonar.getSonarType());
         Matrix4f matrix = poseStack.last().pose();
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
@@ -276,23 +276,18 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private void renderSonarModel(GuiGraphics graphics, float partialTick) {
         if (minecraft == null || menu.getSonar() == null) return;
         SonarBlockEntity sonar = menu.getSonar();
-        BlockState state = sonar.getBlockState();
+        BlockState state = previewBlockState(sonar);
         PoseStack poseStack = graphics.pose();
         graphics.flush();
         poseStack.pushPose();
-        applyPreviewTransform(poseStack, previewYaw(sonar), sonar.getSonarType());
-        if (sideScanWorldTransformIsUpsideDown(sonar)) {
-            poseStack.translate(0.5, 0.5, 0.5);
-            poseStack.mulPose(Axis.XP.rotationDegrees(180.0f));
-            poseStack.translate(-0.5, -0.5, -0.5);
-        }
+        applyPreviewTransform(poseStack, previewYaw(sonar.getSonarType()), sonar.getSonarType());
 
         RenderSystem.enableDepthTest();
         MultiBufferSource.BufferSource buffers = minecraft.renderBuffers().bufferSource();
         minecraft.getBlockRenderer().renderSingleBlock(state, poseStack, buffers,
                 LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY);
         if (sonar.getSonarType() == SonarType.MECHANICAL_IMAGING_C) {
-            renderMechanicalRotatingPart(sonar, partialTick, poseStack, buffers);
+            renderMechanicalRotatingPart(sonar, state, partialTick, poseStack, buffers);
         }
         buffers.endBatch();
         poseStack.popPose();
@@ -311,20 +306,27 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         poseStack.translate(-0.5, -0.5, -0.5);
     }
 
-    private static float previewYaw(SonarBlockEntity sonar) {
-        Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
-        double heading = Math.toDegrees(Math.atan2(facing.getStepX(), facing.getStepZ()));
-        double forwardFacingOffset = sonar.getSonarType() == SonarType.FORWARD_LOOKING_F ? 180.0 : 0.0;
-        return (float) (45.0 - heading + forwardFacingOffset);
+    private static BlockState previewBlockState(SonarBlockEntity sonar) {
+        SonarType type = sonar.getSonarType();
+        boolean upsideDown = type == SonarType.FORWARD_LOOKING_F
+                || type == SonarType.MECHANICAL_IMAGING_C;
+        return sonar.getBlockState().getBlock().defaultBlockState()
+                .setValue(SonarBlock.FACING, Direction.NORTH)
+                .setValue(SonarBlock.UPSIDE_DOWN, upsideDown);
+    }
+
+    private static float previewYaw(SonarType type) {
+        return type == SonarType.FORWARD_LOOKING_F ? 45.0f : -135.0f;
     }
 
     private static PreviewPose previewPose(SonarBlockEntity sonar, int tiltAngle) {
-        Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
+        BlockState state = previewBlockState(sonar);
+        Direction facing = state.getValue(SonarBlock.FACING);
         SonarOrientation base = new SonarOrientation(
                 Vec3.atLowerCornerOf(facing.getNormal()),
                 Vec3.atLowerCornerOf(facing.getClockWise().getNormal()),
                 new Vec3(0, 1, 0));
-        if (sonar.isUpsideDown() ^ sideScanWorldTransformIsUpsideDown(sonar)) {
+        if (state.getValue(SonarBlock.UPSIDE_DOWN)) {
             base = new SonarOrientation(base.forward().scale(-1),
                     base.right(), base.up().scale(-1));
         }
@@ -349,31 +351,21 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         return new PreviewPose(origin, orientation);
     }
 
-    private static boolean sideScanWorldTransformIsUpsideDown(SonarBlockEntity sonar) {
-        return sonar.getSonarType() == SonarType.SIDE_SCAN_D
-                && SonarOrientation.of(sonar).up().y < -1.0e-3;
-    }
-
-    private void renderMechanicalRotatingPart(SonarBlockEntity sonar, float partialTick,
-                                              PoseStack poseStack, MultiBufferSource.BufferSource buffers) {
+    private void renderMechanicalRotatingPart(SonarBlockEntity sonar, BlockState state,
+                                              float partialTick, PoseStack poseStack,
+                                              MultiBufferSource.BufferSource buffers) {
         BakedModel rotatingModel = minecraft.getModelManager()
                 .getModel(MechanicalSonarRenderer.ROTATING_MODEL);
-        Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
-        float placementAngle = switch (facing) {
-            case EAST -> 90;
-            case SOUTH -> 180;
-            case WEST -> 270;
-            default -> 0;
-        };
         poseStack.pushPose();
         poseStack.translate(0.5, 0.5, 0.5);
-        poseStack.mulPose(Axis.YP.rotationDegrees(-placementAngle));
-        if (sonar.isUpsideDown()) poseStack.mulPose(Axis.XP.rotationDegrees(180));
+        if (state.getValue(SonarBlock.UPSIDE_DOWN)) {
+            poseStack.mulPose(Axis.XP.rotationDegrees(180.0f));
+        }
         poseStack.mulPose(Axis.YP.rotationDegrees(-sonar.getMechanicalAngle(partialTick)));
         poseStack.translate(-0.5, -0.5, -0.5);
         minecraft.getBlockRenderer().getModelRenderer().renderModel(
                 poseStack.last(), buffers.getBuffer(RenderType.cutout()),
-                sonar.getBlockState(), rotatingModel, 1.0f, 1.0f, 1.0f,
+                state, rotatingModel, 1.0f, 1.0f, 1.0f,
                 LightTexture.FULL_BRIGHT, OverlayTexture.NO_OVERLAY,
                 ModelData.EMPTY, RenderType.cutout());
         poseStack.popPose();
