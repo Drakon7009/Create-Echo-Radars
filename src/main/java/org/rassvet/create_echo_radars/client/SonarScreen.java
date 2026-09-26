@@ -305,7 +305,8 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private static float previewYaw(SonarBlockEntity sonar) {
         Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
         double heading = Math.toDegrees(Math.atan2(facing.getStepX(), facing.getStepZ()));
-        return (float) (45.0 - heading);
+        double forwardFacingOffset = sonar.getSonarType() == SonarType.FORWARD_LOOKING_F ? 180.0 : 0.0;
+        return (float) (45.0 - heading + forwardFacingOffset);
     }
 
     private static PreviewPose previewPose(SonarBlockEntity sonar, int tiltAngle) {
