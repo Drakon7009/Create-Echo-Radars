@@ -2,8 +2,13 @@ package org.rassvet.create_echo_radars.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
+import com.simibubi.create.AllPartialModels;
 import com.simibubi.create.foundation.blockEntity.renderer.SafeBlockEntityRenderer;
+import com.simibubi.create.content.kinetics.base.KineticBlockEntityRenderer;
+import net.createmod.ponder.api.level.PonderLevel;
+import net.createmod.catnip.render.CachedBuffers;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
@@ -31,6 +36,13 @@ public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<Sonar
         if (sonar.getSonarType() != SonarType.MECHANICAL_IMAGING_C) return;
         BakedModel rotatingModel = Minecraft.getInstance().getModelManager()
                 .getModel(ROTATING_MODEL);
+        Direction inputFace = sonar.isUpsideDown() ? Direction.UP : Direction.DOWN;
+        int shaftLight = LevelRenderer.getLightColor(sonar.getLevel(),
+                sonar.getBlockPos().relative(inputFace));
+        KineticBlockEntityRenderer.standardKineticRotationTransform(
+                CachedBuffers.partialFacing(AllPartialModels.SHAFT_HALF,
+                        sonar.getBlockState(), inputFace), sonar, shaftLight)
+                .renderInto(poseStack, buffers.getBuffer(RenderType.solid()));
         Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
         float placementAngle = switch (facing) {
             case EAST -> 90;
@@ -44,7 +56,18 @@ public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<Sonar
         if (sonar.isUpsideDown()) {
             poseStack.mulPose(Axis.XP.rotationDegrees(180));
         }
-        poseStack.mulPose(Axis.YP.rotationDegrees(-sonar.getMechanicalAngle(partialTick)));
+        float visualAngle;
+        if (sonar.getLevel() instanceof PonderLevel) {
+            // Ponder can change kinetic speed long after its scene clock starts.
+            // Use the same absolute animation angle as its Create shaft.
+            visualAngle = (float) Math.toDegrees(KineticBlockEntityRenderer.getAngleForBe(
+                    sonar, sonar.getBlockPos(), Direction.Axis.Y));
+        } else {
+            float shaftOffset = KineticBlockEntityRenderer.getRotationOffsetForPosition(
+                    sonar, sonar.getBlockPos(), Direction.Axis.Y);
+            visualAngle = -sonar.getMechanicalAngle(partialTick) + shaftOffset;
+        }
+        poseStack.mulPose(Axis.YP.rotationDegrees(visualAngle));
         poseStack.translate(-0.5, -0.5, -0.5);
         Minecraft.getInstance().getBlockRenderer().getModelRenderer().renderModel(
                 poseStack.last(), buffers.getBuffer(RenderType.cutout()),
