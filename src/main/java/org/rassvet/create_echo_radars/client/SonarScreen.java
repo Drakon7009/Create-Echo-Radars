@@ -38,6 +38,8 @@ import java.util.function.BooleanSupplier;
 public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private static final ResourceLocation TEXTURE = ResourceLocation.fromNamespaceAndPath(
             CreateEchoRadars.MOD_ID, "textures/gui/sonar_settings.png");
+    private static final ResourceLocation BLOCKER_TEXTURE = ResourceLocation.fromNamespaceAndPath(
+            CreateEchoRadars.MOD_ID, "textures/gui/sonar_settings_blocker.png");
     private static final int TEXTURE_WIDTH = 256;
     private static final int TEXTURE_HEIGHT = 512;
     private static final int THREE_SLIDER_PANEL_V = 256;
@@ -47,6 +49,8 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private static final int THREE_SLIDER_SCREEN_HEIGHT = 154;
     private static final int SLIDER_WIDTH = 199;
     private static final int SLIDER_HEIGHT = 26;
+    private static final int BLOCKER_WIDTH = 189;
+    private static final int BLOCKER_HEIGHT = 16;
     /** The preview is angular only. Its length must never be derived from sonar range. */
     private static final double PREVIEW_CONE_LENGTH = 1.55;
     /** Center of the red forward-looking emitter in sonar.obj, relative to the block center. */
@@ -67,6 +71,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private IconToggleButton autoHeightButton;
     private IconToggleButton anglePreviewButton;
     private IntSlider draggedSlider;
+    private boolean settingsSent;
 
     public SonarScreen(SonarMenu menu, Inventory inventory, Component title) {
         super(menu, inventory, title);
@@ -139,14 +144,18 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
                 }));
 
         addRenderableWidget(new ApplyButton(leftPos + 192, footerY, 18, 19,
-                Component.translatable("gui.create_echo_radars.apply"), () -> {
-                    captureDraft();
-                    if (menu.getSonar() != null) {
-                        ModNetworking.sendSettings(menu.getSonar().getBlockPos(), draftRange,
-                                draftSector, draftVerticalSector, draftTiltAngle, draftAutoHeight);
-                    }
-                    onClose();
-                }));
+                Component.translatable("gui.create_echo_radars.apply"), this::onClose));
+    }
+
+    @Override
+    public void onClose() {
+        if (!settingsSent && draftInitialized && menu.getSonar() != null) {
+            settingsSent = true;
+            captureDraft();
+            ModNetworking.sendSettings(menu.getSonar().getBlockPos(), draftRange,
+                    draftSector, draftVerticalSector, draftTiltAngle, draftAutoHeight);
+        }
+        super.onClose();
     }
 
     private void captureDraft() {
@@ -443,6 +452,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         private final int max;
         private final String suffix;
         private final Runnable onValueChanged;
+        private int availableMaximum;
         private boolean dragging;
 
         private IntSlider(int x, int y, int width, String key, int min, int max,
@@ -452,6 +462,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
             this.key = key;
             this.min = min;
             this.max = max;
+            this.availableMaximum = max;
             this.suffix = suffix;
             this.onValueChanged = onValueChanged;
             updateMessage();
@@ -463,6 +474,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
 
         private void clampTo(int maximumValue) {
             int clampedMaximum = Mth.clamp(maximumValue, min, max);
+            availableMaximum = clampedMaximum;
             if (intValue() <= clampedMaximum) return;
             value = (clampedMaximum - min) / (double) (max - min);
             updateMessage();
@@ -509,6 +521,15 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         public void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
             graphics.blit(TEXTURE, getX(), getY(), 8, 23,
                     SLIDER_WIDTH, SLIDER_HEIGHT, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+            if (availableMaximum < max) {
+                int limitHandleX = getX() + 5 + (int) Math.round(
+                        (availableMaximum - min) * (width - 15) / (double) (max - min));
+                int blockedStart = limitHandleX + 5;
+                int blockedWidth = getX() + 5 + BLOCKER_WIDTH - blockedStart;
+                graphics.blit(BLOCKER_TEXTURE, blockedStart, getY() + 5,
+                        blockedStart - (getX() + 5), 0,
+                        blockedWidth, BLOCKER_HEIGHT, BLOCKER_WIDTH, BLOCKER_HEIGHT);
+            }
             int handleX = getX() + 5 + (int) Math.round(value * (width - 15));
             int sourceY = isHoveredOrFocused() ? 208 : 187;
             graphics.blit(TEXTURE, handleX, getY() + 4, 0, sourceY,
