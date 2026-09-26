@@ -40,4 +40,4 @@ Install these mods only if you want the corresponding features:
 ## Credits
 
 - **Drakon7009** — mod author.
-- **chakchak** and **ken_flish** — textures.
+- **chakchak777** and **ken_flish** — textures.
