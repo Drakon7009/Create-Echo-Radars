@@ -373,7 +373,8 @@ public final class SonarConfigScreen {
                         ServerConfig.defaultVerticalBeams(type),
                         () -> values.beams.get(type).vertical(),
                         value -> values.setVerticalBeams(type, value),
-                        ServerConfig.minimumVerticalBeams(type), 50, 1));
+                        ServerConfig.minimumVerticalBeams(type),
+                        ServerConfig.maximumVerticalBeams(type), 1));
             }
             additionalRays = Option.<AdditionalRayCount>createBuilder()
                     .name(Component.translatable("config.create_echo_radars.server.additional_rays"))

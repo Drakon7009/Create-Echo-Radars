@@ -65,9 +65,8 @@ public final class MechanicalSweepBuffer<K, V> {
             return;
         }
         if (travelled > 1.0e-4f) {
-            boolean removedVisible = visible.entrySet().removeIf(entry -> SonarRotation.crossedAngle(
-                    previousSweep, currentSweep, sectorAngle(entry.getKey()), angularSpeed));
-            if (removedVisible) visibleValuesDirty = true;
+            // A sweep may outrun the trace worker; keep the previous sector until
+            // a completed replacement (including an empty result) is available.
             Iterator<Map.Entry<Integer, PendingSector<K, V>>> iterator = pending.entrySet().iterator();
             while (iterator.hasNext()) {
                 PendingSector<K, V> sector = iterator.next().getValue();

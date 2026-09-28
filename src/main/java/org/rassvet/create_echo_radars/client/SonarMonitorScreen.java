@@ -29,8 +29,6 @@ public final class SonarMonitorScreen extends Screen {
     private static final int TARGET_UI_PIXELS = 900;
     private static final int GRID_MARGIN_PIXELS = 21;
     private static final double TRACK_HIT_RADIUS = 12;
-    private static final int TRACK_TEXTURE_PIXELS = 256;
-    private static final int MINIMUM_TRACK_QUAD_PIXELS = 8;
 
     private final BlockPos controllerPos;
     private int uiSize;
@@ -85,10 +83,11 @@ public final class SonarMonitorScreen extends Screen {
                 displayTop - area.bottom() * displayScale, 10);
         poseStack.scale(displayScale, -displayScale, 1);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
-        float trackQuadPixels = Math.max(MINIMUM_TRACK_QUAD_PIXELS,
-                Math.round(TRACK_TEXTURE_PIXELS * uiScale));
+        // Screen.render receives the frame delta in 1.21.1, not the current tick fraction.
+        // The sweep angle needs the same interpolation time as the monitor in the world.
+        float gamePartialTick = Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(true);
         SonarMonitorRenderer.renderScreen(monitor, snapshot, poseStack, graphics.bufferSource(),
-                partialTick, hoveredTrackId, trackQuadPixels * 0.5f / displayScale);
+                gamePartialTick, hoveredTrackId);
         poseStack.popPose();
         graphics.flush();
         graphics.drawCenteredString(font, Component.translatable("create_radar.monitor.click_hint"),

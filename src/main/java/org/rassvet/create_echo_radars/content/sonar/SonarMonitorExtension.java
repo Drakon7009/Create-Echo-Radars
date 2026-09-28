@@ -1,5 +1,7 @@
 package org.rassvet.create_echo_radars.content.sonar;
 
+import com.happysg.radar.block.behavior.networks.config.DetectionConfig;
+
 public interface SonarMonitorExtension {
     SonarMonitorSnapshot createEchoRadars$getSonarSnapshot();
 
@@ -12,4 +14,6 @@ public interface SonarMonitorExtension {
     SonarMonitorDimensions createEchoRadars$getMonitorDimensions();
 
     void createEchoRadars$setMonitorDimensions(int width, int height);
+
+    DetectionConfig createEchoRadars$getDetectionConfig();
 }

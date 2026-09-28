@@ -126,6 +126,23 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity>, S
     }
 
     @Override
+    public BlockState getRotatedBlockState(BlockState state, Direction targetedFace) {
+        // Top/bottom clicks keep Create's horizontal rotation. Side clicks flip
+        // the mounting base between the floor and ceiling poses.
+        return targetedFace.getAxis() == Direction.Axis.Y
+                ? state.setValue(FACING, state.getValue(FACING).getClockWise(Direction.Axis.Y))
+                : state.cycle(UPSIDE_DOWN);
+    }
+
+    @Override
+    protected boolean areStatesKineticallyEquivalent(BlockState oldState, BlockState newState) {
+        // The mechanical sonar's shaft changes from DOWN to UP when flipped.
+        return super.areStatesKineticallyEquivalent(oldState, newState)
+                && (sonarType != SonarType.MECHANICAL_IMAGING_C
+                || oldState.getValue(UPSIDE_DOWN).equals(newState.getValue(UPSIDE_DOWN)));
+    }
+
+    @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {
             if (!moving && level.getBlockEntity(pos) instanceof SonarBlockEntity sonar

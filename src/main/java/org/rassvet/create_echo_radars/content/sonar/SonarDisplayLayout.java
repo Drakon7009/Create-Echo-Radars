@@ -86,6 +86,14 @@ public final class SonarDisplayLayout {
         return frame.completedTick() != 0 || !frame.returns().isEmpty();
     }
 
+    public static int historyAgeRow(double currentTick, long frameTick,
+                                    int historyTicks, int rowCapacity) {
+        int capacity = Math.max(1, rowCapacity);
+        double age = Math.max(0, currentTick - frameTick);
+        return Math.max(0, Math.min(capacity - 1,
+                (int) Math.floor(age * capacity / Math.max(1, historyTicks))));
+    }
+
     public static SideScanCell sideScanCell(Area area, int rangeBin, int displayRange,
                                             boolean rightSide, int ageRows,
                                             boolean pointGaps) {

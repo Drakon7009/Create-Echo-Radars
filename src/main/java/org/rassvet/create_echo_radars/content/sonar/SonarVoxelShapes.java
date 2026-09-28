@@ -29,12 +29,20 @@ public final class SonarVoxelShapes {
     }
 
     public static VoxelShape forSonar(SonarType type, Direction facing, boolean upsideDown) {
+        boolean upperMount = hasUpperMount(type, upsideDown);
         VoxelShaper shaper = switch (type) {
-            case ECHO_SOUNDER_A -> upsideDown ? ECHO_LOW_MOUNT : ECHO_HIGH_MOUNT;
-            case SIDE_SCAN_D -> upsideDown ? LOW_MOUNT : HIGH_MOUNT;
-            case FORWARD_LOOKING_F, MECHANICAL_IMAGING_C -> upsideDown ? HIGH_MOUNT : LOW_MOUNT;
+            case ECHO_SOUNDER_A -> upperMount ? ECHO_HIGH_MOUNT : ECHO_LOW_MOUNT;
+            case SIDE_SCAN_D, FORWARD_LOOKING_F, MECHANICAL_IMAGING_C ->
+                    upperMount ? HIGH_MOUNT : LOW_MOUNT;
         };
         return shaper.get(facing);
+    }
+
+    public static boolean hasUpperMount(SonarType type, boolean upsideDown) {
+        return switch (type) {
+            case ECHO_SOUNDER_A, SIDE_SCAN_D -> !upsideDown;
+            case FORWARD_LOOKING_F, MECHANICAL_IMAGING_C -> upsideDown;
+        };
     }
 
     private static VoxelShaper horizontal(VoxelShape base, VoxelShape housing) {

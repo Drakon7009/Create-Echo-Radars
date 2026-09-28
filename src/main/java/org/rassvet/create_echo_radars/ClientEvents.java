@@ -65,6 +65,7 @@ public final class ClientEvents {
     }
 
     private static void registerAdditionalModels(ModelEvent.RegisterAdditional event) {
+        event.register(MechanicalSonarRenderer.SHAFT_MODEL);
         event.register(MechanicalSonarRenderer.ROTATING_MODEL);
     }
 

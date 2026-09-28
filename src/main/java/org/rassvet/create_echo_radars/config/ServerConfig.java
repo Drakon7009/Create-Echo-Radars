@@ -56,7 +56,7 @@ public final class ServerConfig {
             VERTICAL_BEAMS.put(type, builder.comment(
                             "Vertical sub-beams emitted by the " + type.registryName() + " sonar.")
                     .defineInRange(path + ".vertical", defaultVerticalBeams(type),
-                            minimumVerticalBeams(type), 50));
+                            minimumVerticalBeams(type), maximumVerticalBeams(type)));
         }
         ADDITIONAL_RAYS = builder.comment(
                         "Additional rays emitted around a primary hit. Allowed values: 4, 8, or 16.")
@@ -124,7 +124,7 @@ public final class ServerConfig {
     public static int verticalBeams(SonarType type) {
         int configured = usesLegacyBeamSettings()
                 ? LEGACY_VERTICAL_BEAMS.get() : VERTICAL_BEAMS.get(type).get();
-        return clamp(configured, minimumVerticalBeams(type), 50);
+        return clamp(configured, minimumVerticalBeams(type), maximumVerticalBeams(type));
     }
 
     public static BeamSettings beamSettings(SonarType type) {
@@ -216,7 +216,7 @@ public final class ServerConfig {
             HORIZONTAL_BEAMS.get(types[i]).set(odd(clamp(horizontalBeams[i],
                     minimumHorizontalBeams(types[i]), maximumHorizontalBeams(types[i]))));
             VERTICAL_BEAMS.get(types[i]).set(clamp(verticalBeams[i],
-                    minimumVerticalBeams(types[i]), 50));
+                    minimumVerticalBeams(types[i]), maximumVerticalBeams(types[i])));
         }
         LEGACY_HORIZONTAL_BEAMS.set(DEFAULT_HORIZONTAL_BEAMS);
         LEGACY_VERTICAL_BEAMS.set(DEFAULT_VERTICAL_BEAMS);
@@ -247,7 +247,7 @@ public final class ServerConfig {
     }
 
     public static int minimumHorizontalBeams(SonarType type) {
-        return type == SonarType.SIDE_SCAN_D ? 1 : 11;
+        return type == SonarType.SIDE_SCAN_D || type == SonarType.MECHANICAL_IMAGING_C ? 1 : 11;
     }
 
     public static int maximumHorizontalBeams(SonarType type) {
@@ -260,6 +260,10 @@ public final class ServerConfig {
 
     public static int minimumVerticalBeams(SonarType type) {
         return type == SonarType.SIDE_SCAN_D ? 9 : 1;
+    }
+
+    public static int maximumVerticalBeams(SonarType type) {
+        return type == SonarType.MECHANICAL_IMAGING_C ? 81 : 50;
     }
 
     private static boolean validAdditionalRays(Object value) {

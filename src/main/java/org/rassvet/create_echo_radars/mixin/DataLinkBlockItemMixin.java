@@ -33,6 +33,7 @@ import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlock;
 import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarDataLinkBlock;
+import org.rassvet.create_echo_radars.content.sonar.SonarVoxelShapes;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -208,7 +209,8 @@ public abstract class DataLinkBlockItemMixin {
         BlockState miniState = org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_DATA_LINK.get()
                 .defaultBlockState()
                 .setValue(SonarDataLinkBlock.FACING, ctx.getClickedFace())
-                .setValue(SonarDataLinkBlock.UPSIDE_DOWN, sonar.isUpsideDown())
+                .setValue(SonarDataLinkBlock.UPSIDE_DOWN,
+                        SonarVoxelShapes.hasUpperMount(sonar.getSonarType(), sonar.isUpsideDown()))
                 .setValue(SonarDataLinkBlock.WATERLOGGED, waterlogged);
         level.setBlock(placedPos, miniState, 3);
 

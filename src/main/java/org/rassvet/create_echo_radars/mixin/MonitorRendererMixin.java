@@ -2,6 +2,7 @@ package org.rassvet.create_echo_radars.mixin;
 
 import com.happysg.radar.block.monitor.MonitorBlockEntity;
 import com.happysg.radar.block.monitor.MonitorRenderer;
+import com.happysg.radar.config.RadarConfig;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.renderer.MultiBufferSource;
 import org.rassvet.create_echo_radars.client.SonarMonitorRenderer;
@@ -27,6 +28,10 @@ public abstract class MonitorRendererMixin {
         SonarMonitorExtension extension = (SonarMonitorExtension) monitor;
         if (snapshot == null || !monitor.isController()
                 || (!monitor.isLinked() && !extension.createEchoRadars$isSyntheticSnapshot())) return;
+        if (RadarConfig.client().disableMonitorRendering.get()) {
+            ci.cancel();
+            return;
+        }
         SonarMonitorRenderer.render(monitor, snapshot, poseStack, buffers, partialTick);
         ci.cancel();
     }

@@ -1,6 +1,7 @@
 package org.rassvet.create_echo_radars.mixin;
 
 import com.happysg.radar.block.monitor.MonitorBlockEntity;
+import com.happysg.radar.block.behavior.networks.config.DetectionConfig;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
@@ -25,6 +26,9 @@ import org.spongepowered.asm.mixin.Shadow;
 public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     @Shadow
     protected @Nullable BlockPos radarPos;
+
+    @Shadow
+    protected DetectionConfig filter;
 
     @Unique
     private SonarMonitorSnapshot createEchoRadars$sonarSnapshot;
@@ -175,5 +179,10 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     public void createEchoRadars$setMonitorDimensions(int width, int height) {
         createEchoRadars$monitorWidth = Math.max(1, width);
         createEchoRadars$monitorHeight = Math.max(1, height);
+    }
+
+    @Override
+    public DetectionConfig createEchoRadars$getDetectionConfig() {
+        return filter;
     }
 }

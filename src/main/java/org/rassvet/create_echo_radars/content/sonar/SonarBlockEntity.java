@@ -617,9 +617,9 @@ public class SonarBlockEntity extends KineticBlockEntity
     }
 
     public float mechanicalAngularSpeed() {
-        // Create's shaft renderer rotates around +Y for positive kinetic speed.
-        // Our model and scan basis use the opposite yaw convention.
-        return SonarRotation.angularSpeed(-getSpeed(),
+        // The inverted model's local Y axis points opposite Create's shaft axis.
+        // Keep the scan and the rotating housing aligned with the visible shaft.
+        return SonarRotation.angularSpeed(isUpsideDown() ? getSpeed() : -getSpeed(),
                 AllConfigs.server().kinetics.maxRotationSpeed.get());
     }
 

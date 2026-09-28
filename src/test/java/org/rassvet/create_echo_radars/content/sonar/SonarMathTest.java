@@ -11,6 +11,13 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class SonarMathTest {
     @Test
+    void waterfallHistoryUsesElapsedTicksInsteadOfFrameCount() {
+        assertEquals(0, SonarDisplayLayout.historyAgeRow(100, 100, 200, 100));
+        assertEquals(20, SonarDisplayLayout.historyAgeRow(100, 60, 200, 100));
+        assertEquals(99, SonarDisplayLayout.historyAgeRow(100, -120, 200, 100));
+    }
+
+    @Test
     void coneUsesStaticTwentyDegreeVerticalAperture() {
         assertTrue(SonarKinematics.insideCone(0, 2, -30, 0, -1, 120, 128));
         assertFalse(SonarKinematics.insideCone(0, 20, -30, 0, -1, 120, 128));
