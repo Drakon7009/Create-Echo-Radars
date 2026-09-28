@@ -14,6 +14,13 @@ run/
 # Local draft for the CurseForge project page
 /CURSEFORGE.md
 
+# Local artwork, logs, and development utilities
+/icon.png
+/icon.psd
+/sonar_settings_blocker.png
+/logs/
+/tools/
+
 # External projects intentionally not part of this mod
 sonar_simulation/
 Create-Radar-master/
