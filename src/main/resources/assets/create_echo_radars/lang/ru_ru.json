@@ -119,7 +119,7 @@
   "config.create_echo_radars.server.refine_only_undetected_neighbors": "Дополнительные лучи только для новых соседних блоков",
   "config.create_echo_radars.server.refine_only_undetected_neighbors.description": "Не создаёт дополнительные лучи, если этот или соседний блок уже был обнаружен во время текущего сканирования.",
   "config.create_echo_radars.server.hit_refinement_backtrack": "Отступ уточнения попадания",
-  "config.create_echo_radars.server.hit_refinement_backtrack.description": "Количество блоков перед попаданием для повторной проверки. Ноль отключает уточнение.",
+  "config.create_echo_radars.server.hit_refinement_backtrack.description": "Минимальный отступ перед попаданием для повторной проверки. При большом промежутке между лучами отступ увеличивается. Ноль отключает уточнение.",
   "config.create_echo_radars.server.blocks_per_tick": "Блоков за тик",
   "config.create_echo_radars.server.blocks_per_tick.description": "Максимальное продвижение каждого подлуча за серверный тик.",
   "config.create_echo_radars.server.ping_pause_ticks": "Пауза перед новым пингом",

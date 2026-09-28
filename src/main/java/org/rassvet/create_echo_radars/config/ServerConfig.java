@@ -65,7 +65,7 @@ public final class ServerConfig {
                         "Only emit additional rays if no previously detected block is adjacent to the hit.")
                 .define("scanning.refineOnlyUndetectedNeighbors", false);
         HIT_REFINEMENT_BACKTRACK_BLOCKS = builder.comment(
-                        "Blocks before a hit that local refinement rays re-scan. 0 disables hit refinement.")
+                        "Minimum blocks before a hit that refinement rays re-scan; wide beam gaps increase this distance. 0 disables refinement.")
                 .defineInRange("scanning.hitRefinementBacktrackBlocks", 5, 0, 16);
         BLOCKS_PER_TICK = builder.comment("Blocks advanced by each sub-ray per server tick.")
                 .defineInRange("scanning.blocksPerTick", 10, 1, 16);
