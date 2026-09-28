@@ -29,7 +29,7 @@ class MechanicalSweepBufferTest {
     }
 
     @Test
-    void forwardSweepClearsOnlyCrossedSectorsAndAtomicallyReplacesPendingData() {
+    void forwardSweepRetainsSectorUntilFreshDataReplacesIt() {
         MechanicalSweepBuffer<String, String> buffer = buffer();
         buffer.replaceSector(0, Map.of("old-0", "old-0"), 0);
         buffer.replaceSector(2, Map.of("old-2", "old-2"), 0);
@@ -39,10 +39,11 @@ class MechanicalSweepBufferTest {
         buffer.advanceSweep(359, 4, 0);
         buffer.advanceSweep(3, 4, 1);
 
-        assertFalse(buffer.hasVisibleSector(0));
+        assertTrue(buffer.hasVisibleSector(0));
         assertTrue(buffer.hasVisibleSector(2));
         assertTrue(buffer.hasVisibleSector(4));
         Set<String> values = visibleValues(buffer);
+        assertTrue(values.contains("old-0"));
         assertFalse(values.contains("old-2"));
         assertTrue(values.contains("new-2"));
         assertTrue(values.contains("old-4"));

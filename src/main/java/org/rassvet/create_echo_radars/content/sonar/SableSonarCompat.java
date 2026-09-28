@@ -35,9 +35,17 @@ public final class SableSonarCompat {
     public static Snapshot capture(Level level, Vec3 origin, SonarOrientation orientation,
                                    int range, int horizontalSector, int verticalSector,
                                    Collection<RaySegment> rays) {
+        return capture(level, origin, origin, orientation, range, horizontalSector,
+                verticalSector, rays);
+    }
+
+    public static Snapshot capture(Level level, Vec3 origin, Vec3 ownerSample,
+                                   SonarOrientation orientation, int range,
+                                   int horizontalSector, int verticalSector,
+                                   Collection<RaySegment> rays) {
         if (rays.isEmpty() || !ModList.get().isLoaded(SABLE_MOD_ID)) return Snapshot.EMPTY;
         try {
-            return LoadedSable.captureLoadedSubLevels(level, origin, orientation, range,
+            return LoadedSable.captureLoadedSubLevels(level, origin, ownerSample, orientation, range,
                     horizontalSector, verticalSector, rays);
         } catch (LinkageError | RuntimeException error) {
             return Snapshot.EMPTY;
@@ -173,12 +181,17 @@ public final class SableSonarCompat {
             return List.copyOf(targets);
         }
 
-        private static Snapshot captureLoadedSubLevels(Level level, Vec3 origin, SonarOrientation orientation,
+        private static Snapshot captureLoadedSubLevels(Level level, Vec3 origin, Vec3 ownerSample,
+                                                       SonarOrientation orientation,
                                                        int range, int horizontalSector, int verticalSector,
                                                        Collection<RaySegment> rays) {
             dev.ryanhcode.sable.api.sublevel.SubLevelContainer container =
                     dev.ryanhcode.sable.api.sublevel.SubLevelContainer.getContainer(level);
             if (container == null || container.getLoadedCount() == 0) return Snapshot.EMPTY;
+            dev.ryanhcode.sable.companion.SubLevelAccess owner =
+                    dev.ryanhcode.sable.companion.SableCompanion.INSTANCE
+                            .getContaining(level, ownerSample);
+            java.util.UUID ownerId = owner == null ? null : owner.getUniqueId();
 
             AABB batchBounds = null;
             for (RaySegment ray : rays) {
@@ -193,7 +206,7 @@ public final class SableSonarCompat {
 
             List<SubLevelTrace> snapshots = new ArrayList<>();
             for (dev.ryanhcode.sable.sublevel.SubLevel subLevel : List.copyOf(container.getAllSubLevels())) {
-                if (subLevel.isRemoved()) continue;
+                if (subLevel.isRemoved() || subLevel.getUniqueId().equals(ownerId)) continue;
                 AABB globalBounds = subLevel.boundingBox().toMojang();
                 if (!globalBounds.intersects(batchBounds)) continue;
                 if (!SonarTraceSupport.boxMayIntersectCone(globalBounds, origin, orientation,

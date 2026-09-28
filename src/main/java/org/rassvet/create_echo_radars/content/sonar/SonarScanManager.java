@@ -415,7 +415,11 @@ public final class SonarScanManager {
                 if (ray.finished) continue;
                 Vec3 rayOrigin = ray.origin(scanDescriptor);
                 Vec3 direction = ray.direction(scanDescriptor);
+                // Waterfall sonars need one measurement from one boat pose. Advancing
+                // them a few blocks per tick makes a single ping take many seconds.
                 double end = scanDescriptor.type == SonarType.MECHANICAL_IMAGING_C
+                        || scanDescriptor.type == SonarType.SIDE_SCAN_D
+                        || scanDescriptor.type == SonarType.ECHO_SOUNDER_A
                         ? scanDescriptor.range
                         : SonarAdaptiveTracePlan.nextTraceEnd(ray.distance,
                         settings, ray.leaf, blocksPerTick);
@@ -438,8 +442,16 @@ public final class SonarScanManager {
                             ray.directionX, ray.directionY, ray.directionZ,
                             ray.startDistance, ray.endDistance));
                 }
+                Vec3 ownerSample = switch (scanDescriptor.type) {
+                    case ECHO_SOUNDER_A -> scanDescriptor.origin.subtract(
+                            scanDescriptor.forward.scale(0.501));
+                    case SIDE_SCAN_D -> scanDescriptor.origin.add(
+                            scanDescriptor.up.scale(1.0 / 32.0));
+                    default -> scanDescriptor.origin;
+                };
                 sableSnapshot = SableSonarCompat.capture(level,
-                        scanDescriptor.origin, new SonarOrientation(scanDescriptor.forward,
+                        scanDescriptor.origin, ownerSample,
+                        new SonarOrientation(scanDescriptor.forward,
                                 scanDescriptor.right, scanDescriptor.up),
                         scanDescriptor.range,
                         scanDescriptor.type == SonarType.SIDE_SCAN_D ? 180 : scanDescriptor.sector,

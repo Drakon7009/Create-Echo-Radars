@@ -2,11 +2,9 @@ package org.rassvet.create_echo_radars.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import com.mojang.math.Axis;
-import com.simibubi.create.AllPartialModels;
 import com.simibubi.create.foundation.blockEntity.renderer.SafeBlockEntityRenderer;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntityRenderer;
 import net.createmod.ponder.api.level.PonderLevel;
-import net.createmod.catnip.render.CachedBuffers;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -23,6 +21,9 @@ import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 
 public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<SonarBlockEntity> {
+    public static final ModelResourceLocation SHAFT_MODEL = ModelResourceLocation.standalone(
+            ResourceLocation.fromNamespaceAndPath(CreateEchoRadars.MOD_ID,
+                    "block/mechanical_scanning_sonar_shaft"));
     public static final ModelResourceLocation ROTATING_MODEL = ModelResourceLocation.standalone(
             ResourceLocation.fromNamespaceAndPath(CreateEchoRadars.MOD_ID,
                     "block/mechanical_scanning_sonar_rotating"));
@@ -34,15 +35,25 @@ public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<Sonar
     protected void renderSafe(SonarBlockEntity sonar, float partialTick, PoseStack poseStack,
                               MultiBufferSource buffers, int light, int overlay) {
         if (sonar.getSonarType() != SonarType.MECHANICAL_IMAGING_C) return;
+        BakedModel shaftModel = Minecraft.getInstance().getModelManager()
+                .getModel(SHAFT_MODEL);
         BakedModel rotatingModel = Minecraft.getInstance().getModelManager()
                 .getModel(ROTATING_MODEL);
         Direction inputFace = sonar.isUpsideDown() ? Direction.UP : Direction.DOWN;
         int shaftLight = LevelRenderer.getLightColor(sonar.getLevel(),
                 sonar.getBlockPos().relative(inputFace));
-        KineticBlockEntityRenderer.standardKineticRotationTransform(
-                CachedBuffers.partialFacing(AllPartialModels.SHAFT_HALF,
-                        sonar.getBlockState(), inputFace), sonar, shaftLight)
-                .renderInto(poseStack, buffers.getBuffer(RenderType.solid()));
+        float shaftAngle = (float) Math.toDegrees(KineticBlockEntityRenderer.getAngleForBe(
+                sonar, sonar.getBlockPos(), Direction.Axis.Y));
+        poseStack.pushPose();
+        poseStack.translate(0.5, 0.5, 0.5);
+        poseStack.mulPose(Axis.YP.rotationDegrees(shaftAngle));
+        poseStack.mulPose(Axis.XP.rotationDegrees(inputFace == Direction.UP ? -90 : 90));
+        poseStack.translate(-0.5, -0.5, -0.5);
+        Minecraft.getInstance().getBlockRenderer().getModelRenderer().renderModel(
+                poseStack.last(), buffers.getBuffer(RenderType.solid()),
+                sonar.getBlockState(), shaftModel, 1.0f, 1.0f, 1.0f,
+                shaftLight, overlay, ModelData.EMPTY, RenderType.solid());
+        poseStack.popPose();
         Direction facing = sonar.getBlockState().getValue(SonarBlock.FACING);
         float placementAngle = switch (facing) {
             case EAST -> 90;
@@ -59,13 +70,13 @@ public final class MechanicalSonarRenderer extends SafeBlockEntityRenderer<Sonar
         float visualAngle;
         if (sonar.getLevel() instanceof PonderLevel) {
             // Ponder can change kinetic speed long after its scene clock starts.
-            // Use the same absolute animation angle as its Create shaft.
-            visualAngle = (float) Math.toDegrees(KineticBlockEntityRenderer.getAngleForBe(
-                    sonar, sonar.getBlockPos(), Direction.Axis.Y));
+            // The inverted model's local Y axis points opposite Create's shaft axis.
+            visualAngle = sonar.isUpsideDown() ? -shaftAngle : shaftAngle;
         } else {
             float shaftOffset = KineticBlockEntityRenderer.getRotationOffsetForPosition(
                     sonar, sonar.getBlockPos(), Direction.Axis.Y);
-            visualAngle = -sonar.getMechanicalAngle(partialTick) + shaftOffset;
+            visualAngle = -sonar.getMechanicalAngle(partialTick)
+                    + (sonar.isUpsideDown() ? -shaftOffset : shaftOffset);
         }
         poseStack.mulPose(Axis.YP.rotationDegrees(visualAngle));
         poseStack.translate(-0.5, -0.5, -0.5);
