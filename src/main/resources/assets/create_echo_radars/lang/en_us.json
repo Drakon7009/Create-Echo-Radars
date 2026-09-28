@@ -119,7 +119,7 @@
   "config.create_echo_radars.server.refine_only_undetected_neighbors": "Additional rays only for new nearby blocks",
   "config.create_echo_radars.server.refine_only_undetected_neighbors.description": "Skips additional rays when the same block or an adjacent block was already detected during this scan.",
   "config.create_echo_radars.server.hit_refinement_backtrack": "Hit refine backtrack",
-  "config.create_echo_radars.server.hit_refinement_backtrack.description": "Blocks before a hit that local refinement rays scan again. Zero disables refinement.",
+  "config.create_echo_radars.server.hit_refinement_backtrack.description": "Minimum blocks before a hit that refinement rays scan again. Wide beam gaps increase the distance. Zero disables refinement.",
   "config.create_echo_radars.server.blocks_per_tick": "Blocks per tick",
   "config.create_echo_radars.server.blocks_per_tick.description": "Maximum distance advanced by each sub-ray per server tick.",
   "config.create_echo_radars.server.ping_pause_ticks": "Pause before next ping",

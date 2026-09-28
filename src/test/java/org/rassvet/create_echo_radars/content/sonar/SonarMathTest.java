@@ -705,12 +705,6 @@ class SonarMathTest {
     }
 
     @Test
-    void hitRefinementOffsetShrinksWithDistance() {
-        assertTrue(SonarAdaptiveTracePlan.refinementOffsetDegrees(20)
-                > SonarAdaptiveTracePlan.refinementOffsetDegrees(80));
-    }
-
-    @Test
     void hitRefinementCreatesConfiguredRaysAndBacktracks() {
         SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(128, 120, 5, 5, 4, 5);
         SonarAdaptiveTracePlan.Leaf root = new SonarAdaptiveTracePlan.Leaf(2, 2, 0, 0);
@@ -719,8 +713,8 @@ class SonarMathTest {
                 SonarAdaptiveTracePlan.refinementsForHit(root, 70, settings);
         assertEquals(4, refinements.size());
         assertTrue(refinements.stream().allMatch(SonarAdaptiveTracePlan.Leaf::refinement));
-        assertTrue(refinements.stream().allMatch(leaf -> leaf.refinementStartDistance() == 65
-                && leaf.refinementEndDistance() == 128));
+        assertTrue(refinements.stream().allMatch(leaf -> leaf.refinementStartDistance() <= 65
+                && leaf.refinementStartDistance() >= 0 && leaf.refinementEndDistance() == 128));
         assertTrue(refinements.stream().anyMatch(leaf -> leaf.bearingOffset() != 0));
         assertTrue(refinements.stream().anyMatch(leaf -> leaf.pitchOffset() != 0));
     }
@@ -811,16 +805,26 @@ class SonarMathTest {
                 SonarAdaptiveTracePlan.refinementsForHit(root, 70, settings).getFirst();
 
         assertEquals(10, SonarAdaptiveTracePlan.nextTraceEnd(0, settings, root, 10), 1.0e-6);
-        assertEquals(75, SonarAdaptiveTracePlan.nextTraceEnd(65, settings, child, 10), 1.0e-6);
+        assertEquals(child.refinementStartDistance() + 10,
+                SonarAdaptiveTracePlan.nextTraceEnd(
+                        child.refinementStartDistance(), settings, child, 10), 1.0e-6);
         assertEquals(128, child.refinementEndDistance(), 1.0e-6);
     }
 
     @Test
-    void refinedEchoFootprintCanBeSmallerThanBasePixel() {
-        float base = SonarDisplayProjection.echoAngularHalfWidth(120, 51, true);
-        float refined = SonarDisplayProjection.echoAngularHalfWidth(
-                (float) SonarAdaptiveTracePlan.refinementOffsetDegrees(70), true);
-        assertTrue(refined < base);
+    void distantHitRefinementsFillPrimaryBeamGap() {
+        SonarAdaptiveTracePlan.Settings settings = SonarAdaptiveTracePlan.settings(
+                128, 120, 20, 5, 5, 4, 5);
+        SonarAdaptiveTracePlan.Leaf root = new SonarAdaptiveTracePlan.Leaf(2, 2, 0, 0);
+        List<SonarAdaptiveTracePlan.Leaf> rays = SonarAdaptiveTracePlan.refinementsForHit(
+                root, 70, settings);
+        double[] bearings = rays.stream()
+                .mapToDouble(leaf -> SonarAdaptiveTracePlan.bearing(leaf, settings))
+                .sorted().toArray();
+        assertArrayEquals(new double[] {-11.25, -3.75, 3.75, 11.25}, bearings, 1.0e-6);
+        assertTrue(rays.stream().anyMatch(leaf -> leaf.refinementStartDistance() < 65));
+        assertTrue(rays.stream().allMatch(leaf ->
+                Math.abs(leaf.angularResolutionDegrees() - 7.5) < 1.0e-6));
     }
 
     @Test
