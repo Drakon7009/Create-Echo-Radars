@@ -1,6 +1,8 @@
 {
   "block.create_echo_radars.sonar": "Сонар переднего обзора",
   "block.create_echo_radars.echo_sounder": "Эхолот",
+  "monitor.create_echo_radars.echo_sounder.depth": "Глубина: %s",
+  "monitor.create_echo_radars.echo_sounder.range": "Дальность: %s",
   "block.create_echo_radars.mechanical_scanning_sonar": "Механический обзорный сонар",
   "block.create_echo_radars.side_scan_sonar": "Сонар бокового обзора",
   "block.create_echo_radars.signal_summator": "Сумматор сигналов сонара",

@@ -4,7 +4,13 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 final class SonarTraceSupport {
+    private static final double EMITTER_BLOCK_CLEARANCE = 1.5;
+
     private SonarTraceSupport() {}
+
+    static boolean isOwnEmitterBlock(boolean sonarBlock, double distance) {
+        return sonarBlock && distance >= 0 && distance <= EMITTER_BLOCK_CLEARANCE;
+    }
 
     static boolean boxMayIntersectCone(AABB box, Vec3 origin, SonarOrientation orientation,
                                        int horizontalSector, int range) {

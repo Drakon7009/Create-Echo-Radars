@@ -211,11 +211,44 @@ public final class SableSonarCompat {
                 if (!globalBounds.intersects(batchBounds)) continue;
                 if (!SonarTraceSupport.boxMayIntersectCone(globalBounds, origin, orientation,
                         horizontalSector, verticalSector, range)) continue;
+                // A diving vessel can move between the sonar pose and Sable's
+                // containment lookup. Identify its sublevel by the sonar block
+                // itself before allowing its hull into the trace snapshot.
+                if (containsSourceSonar(subLevel, ownerSample)) continue;
 
                 SubLevelSnapshot snapshot = copySubLevel(subLevel, rays);
                 if (!snapshot.sections().isEmpty()) snapshots.add(snapshot);
             }
             return snapshots.isEmpty() ? Snapshot.EMPTY : new Snapshot(List.copyOf(snapshots));
+        }
+
+        private static boolean containsSourceSonar(dev.ryanhcode.sable.sublevel.SubLevel subLevel,
+                                                   Vec3 ownerSample) {
+            dev.ryanhcode.sable.companion.math.Pose3d pose =
+                    new dev.ryanhcode.sable.companion.math.Pose3d(subLevel.logicalPose());
+            BlockPos local = BlockPos.containing(pose.transformPositionInverse(ownerSample));
+            dev.ryanhcode.sable.sublevel.plot.LevelPlot plot = subLevel.getPlot();
+            dev.ryanhcode.sable.companion.math.BoundingBox3ic bounds = plot.getBoundingBox();
+            if (local.getX() < bounds.minX() - 1 || local.getX() > bounds.maxX() + 1
+                    || local.getY() < bounds.minY() - 1 || local.getY() > bounds.maxY() + 1
+                    || local.getZ() < bounds.minZ() - 1 || local.getZ() > bounds.maxZ() + 1) {
+                return false;
+            }
+            for (int x = local.getX() - 1; x <= local.getX() + 1; x++) {
+                for (int y = local.getY() - 1; y <= local.getY() + 1; y++) {
+                    for (int z = local.getZ() - 1; z <= local.getZ() + 1; z++) {
+                        BlockPos position = new BlockPos(x, y, z);
+                        net.minecraft.world.level.ChunkPos chunkPos =
+                                new net.minecraft.world.level.ChunkPos(position);
+                        net.minecraft.world.level.chunk.LevelChunk chunk =
+                                plot.getChunk(plot.toLocal(chunkPos));
+                        if (chunk != null && chunk.getBlockState(position).getBlock() instanceof SonarBlock) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
         }
 
         private static SubLevelSnapshot copySubLevel(dev.ryanhcode.sable.sublevel.SubLevel subLevel,
@@ -348,6 +381,8 @@ public final class SableSonarCompat {
             Vec3 worldHit = pose.transformPosition(localStart.add(localDirection.scale(distance)));
             double worldDistance = worldHit.subtract(origin).dot(direction);
             if (worldDistance < from - EPSILON || worldDistance > to + EPSILON) return true;
+            if (SonarTraceSupport.isOwnEmitterBlock(
+                    block.getBlock() instanceof SonarBlock, worldDistance)) return true;
             hit = new Hit(Math.max(from,worldDistance),incidence,block);
             return false;
         }

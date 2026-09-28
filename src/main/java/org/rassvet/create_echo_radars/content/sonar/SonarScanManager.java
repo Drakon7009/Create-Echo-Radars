@@ -893,6 +893,8 @@ public final class SonarScanManager {
             }
             if (cell.type() == SonarChunkReader.CellType.OBSTACLE
                     || cell.type() == SonarChunkReader.CellType.AIR_BOUNDARY) {
+                if (SonarTraceSupport.isOwnEmitterBlock(cell.state() != null
+                        && cell.state().getBlock() instanceof SonarBlock, distance)) return true;
                 result = MarchResult.hit(distance, incidence,
                         cell.type() == SonarChunkReader.CellType.AIR_BOUNDARY, cell.state());
                 return false;

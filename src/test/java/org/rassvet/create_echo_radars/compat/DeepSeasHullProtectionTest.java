@@ -40,5 +40,20 @@ final class DeepSeasHullProtectionTest {
         assertSame(empty, DeepSeasHullProtection.makePressureImmune(empty));
     }
 
+    @Test
+    void increasesSonarDepthAndPreservesImplosionChance() {
+        Optional<?> result = DeepSeasHullProtection.increaseSonarDepth(
+                Optional.of(new TestHullProperty(46, 0.35f)));
+        TestHullProperty property = (TestHullProperty) result.orElseThrow();
+        assertEquals(512, property.maxWaterDepth());
+        assertEquals(0.35f, property.implosionChance());
+    }
+
+    @Test
+    void preservesHigherConfiguredDepth() {
+        Optional<?> original = Optional.of(new TestHullProperty(800, 0.2f));
+        assertSame(original, DeepSeasHullProtection.increaseSonarDepth(original));
+    }
+
     public record TestHullProperty(int maxWaterDepth, float implosionChance) {}
 }

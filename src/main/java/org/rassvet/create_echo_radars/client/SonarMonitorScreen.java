@@ -14,6 +14,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.phys.Vec3;
+import org.rassvet.create_echo_radars.content.sonar.EchoSounderDepth;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayLayout;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayProjection;
 import org.rassvet.create_echo_radars.content.sonar.SonarMath;
@@ -21,6 +22,7 @@ import org.rassvet.create_echo_radars.content.sonar.SonarMonitorDimensions;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorExtension;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorSnapshot;
 import org.rassvet.create_echo_radars.content.sonar.SonarOrientation;
+import org.rassvet.create_echo_radars.content.sonar.SonarType;
 
 public final class SonarMonitorScreen extends Screen {
     private static final ResourceLocation MONITOR_GUI = ResourceLocation.fromNamespaceAndPath(
@@ -93,6 +95,9 @@ public final class SonarMonitorScreen extends Screen {
         graphics.drawCenteredString(font, Component.translatable("create_radar.monitor.click_hint"),
                 width / 2, top + uiSize + 6, 0xa0a0a0);
         super.render(graphics, mouseX, mouseY, partialTick);
+        if (snapshot.sonarType() == SonarType.ECHO_SOUNDER_A) {
+            renderDepthTooltip(graphics, monitor, snapshot, area, mouseX, mouseY);
+        }
     }
 
     @Override
@@ -162,13 +167,30 @@ public final class SonarMonitorScreen extends Screen {
                 && mouseY >= displayTop && mouseY <= displayTop + displayHeight;
     }
 
+    private void renderDepthTooltip(GuiGraphics graphics, MonitorBlockEntity monitor,
+                                    SonarMonitorSnapshot snapshot, SonarDisplayLayout.Area area,
+                                    int mouseX, int mouseY) {
+        double x = area.left() + (mouseX - displayLeft) / displayScale;
+        double z = area.bottom() + (mouseY - displayTop) / displayScale;
+        SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(area);
+        if (x < map.left() || x > map.right() || z < map.bottom() || z > map.top()) return;
+
+        float depth = SonarMonitorRenderer.echoSounderDepthAt(monitor, snapshot, x, z);
+        String value = Float.isNaN(depth) ? "--" : Math.round(depth * 10f) / 10f + "m";
+        graphics.renderTooltip(font,
+                Component.translatable("monitor.create_echo_radars.echo_sounder.depth", value),
+                mouseX, mouseY);
+    }
+
     private String findTrack(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
                              double mouseX, double mouseY) {
         if (!insideDisplay(mouseX, mouseY)) return null;
         SonarDisplayLayout.Area area = displayArea(monitor);
         SonarDisplayLayout.Area plotArea = snapshot.sonarType()
                 == org.rassvet.create_echo_radars.content.sonar.SonarType.SIDE_SCAN_D
-                ? sideScanPlotArea(area) : area;
+                ? sideScanPlotArea(area)
+                : snapshot.sonarType() == SonarType.ECHO_SOUNDER_A
+                ? EchoSounderDepth.mapArea(area) : area;
         int displayRange = snapshot.effectiveDisplayRange();
         SonarOrientation orientation = snapshot.displayOrientation();
         Vec3 trackOrigin = snapshot.displayOrigin();
@@ -200,8 +222,15 @@ public final class SonarMonitorScreen extends Screen {
                     point = new SonarDisplayProjection.Point(Math.sin(angle) * horizontalRange * 0.94,
                             Math.cos(angle) * horizontalRange * 0.94);
                 }
-                case ECHO_SOUNDER_A -> point = new SonarDisplayProjection.Point(0.9,
-                        1 - normalizedRange * 1.88);
+                case ECHO_SOUNDER_A -> {
+                    if (!SonarMath.insideCone(relative, orientation, snapshot.horizontalSector(),
+                            snapshot.verticalSector(), snapshot.range())) continue;
+                    double elevation = Math.toDegrees(Math.atan2(projection.up(),
+                            Math.hypot(projection.forward(), projection.side())));
+                    point = EchoSounderDepth.angularPoint(projection.bearingDegrees(), elevation,
+                            snapshot.horizontalSector(), snapshot.verticalSector());
+                    if (point == null) continue;
+                }
                 case SIDE_SCAN_D -> {
                     SideScanDataPosition position = ClientConfig.sideScanDataPosition();
                     double signedDistance = Math.copySign(normalizedRange * 0.94,
