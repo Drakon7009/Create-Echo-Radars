@@ -9,8 +9,10 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorSnapshot;
+import org.rassvet.create_echo_radars.content.sonar.EchoSounderDepth;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorExtension;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorDimensions;
+import org.rassvet.create_echo_radars.content.sonar.SonarDisplayLayout;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayProjection;
 import org.rassvet.create_echo_radars.content.sonar.SonarMath;
 import org.rassvet.create_echo_radars.content.sonar.SonarOrientation;
@@ -69,8 +71,23 @@ public abstract class MonitorInputHandlerMixin {
                             Math.sin(angle) * normalizedRange * 0.94,
                             Math.cos(angle) * normalizedRange * 0.94);
                 }
-                case ECHO_SOUNDER_A -> projected = new SonarDisplayProjection.Point(0.9,
-                        1 - normalizedRange * 1.88);
+                case ECHO_SOUNDER_A -> {
+                    if (!SonarMath.insideCone(relative, orientation, snapshot.horizontalSector(),
+                            snapshot.verticalSector(), snapshot.range())) continue;
+                    double elevation = Math.toDegrees(Math.atan2(projection.up(),
+                            Math.hypot(projection.forward(), projection.side())));
+                    SonarDisplayProjection.Point angular = EchoSounderDepth.angularPoint(
+                            projection.bearingDegrees(), elevation,
+                            snapshot.horizontalSector(), snapshot.verticalSector());
+                    if (angular == null) continue;
+                    SonarDisplayLayout.Area display = SonarDisplayLayout.area(dimensions);
+                    SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(display);
+                    double sourceX = map.centerX() + angular.x() * map.width() * 0.5;
+                    double sourceZ = map.centerZ() + angular.z() * map.height() * 0.5;
+                    projected = new SonarDisplayProjection.Point(
+                            (sourceX - display.centerX()) * 2 / display.width(),
+                            -(sourceZ - display.centerZ()) * 2 / display.height());
+                }
                 case SIDE_SCAN_D -> projected = new SonarDisplayProjection.Point(
                         Math.copySign(normalizedRange * 0.94, projection.bearingDegrees()), 0.9);
                 default -> throw new IllegalStateException();

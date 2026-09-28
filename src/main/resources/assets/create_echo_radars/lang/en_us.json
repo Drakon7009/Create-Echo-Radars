@@ -1,6 +1,8 @@
 {
   "block.create_echo_radars.sonar": "Forward-looking Sonar",
   "block.create_echo_radars.echo_sounder": "Echo Sounder",
+  "monitor.create_echo_radars.echo_sounder.depth": "Depth: %s",
+  "monitor.create_echo_radars.echo_sounder.range": "Range: %s",
   "block.create_echo_radars.mechanical_scanning_sonar": "Mechanical Imaging Sonar",
   "block.create_echo_radars.side_scan_sonar": "Side-scan Sonar",
   "block.create_echo_radars.signal_summator": "Sonar Signal Summator",

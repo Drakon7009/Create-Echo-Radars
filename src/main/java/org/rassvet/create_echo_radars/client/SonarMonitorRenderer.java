@@ -13,12 +13,14 @@ import com.mojang.math.Axis;
 import net.createmod.catnip.theme.Color;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.resources.language.I18n;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.core.Direction;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.phys.Vec3;
+import org.rassvet.create_echo_radars.content.sonar.EchoSounderDepth;
 import org.rassvet.create_echo_radars.content.sonar.MechanicalSweepBuffer;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayProjection;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayLayout;
@@ -63,6 +65,7 @@ public final class SonarMonitorRenderer {
     private static final int MAX_CLIENT_HISTORIES = 512;
     private static final int MAX_LOCAL_FRAMES = 512;
     private static final int WATERFALL_HISTORY_TICKS = 200;
+    private static final int ECHO_SOUNDER_MAP_RESOLUTION = 48;
     private static final float MECHANICAL_SAMPLE_DEGREES =
             SonarRotation.MECHANICAL_SCAN_STEP_DEGREES;
     private static final float MECHANICAL_PREFETCH_ARC_DEGREES = 120;
@@ -92,6 +95,22 @@ public final class SonarMonitorRenderer {
                                     PoseStack poseStack, MultiBufferSource buffers, float partialTick,
                                     String hoveredTrackId) {
         renderContents(monitor, snapshot, poseStack, buffers, partialTick, hoveredTrackId, true);
+    }
+
+    public static float echoSounderDepthAt(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
+                                           double x, double z) {
+        if (snapshot.sonarType()
+                != org.rassvet.create_echo_radars.content.sonar.SonarType.ECHO_SOUNDER_A) {
+            return Float.NaN;
+        }
+        SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(displayArea(monitor));
+        if (x < map.left() || x > map.right() || z < map.bottom() || z > map.top()) {
+            return Float.NaN;
+        }
+        EchoSounderDepth.Surface surface = EchoSounderDepth.surface(
+                clientHistory(monitor, snapshot).frames(), snapshot.range(),
+                snapshot.horizontalSector(), snapshot.verticalSector(), ECHO_SOUNDER_MAP_RESOLUTION);
+        return surface.depthAtPosition(map, x, z);
     }
 
     private static void renderContents(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
@@ -289,6 +308,12 @@ public final class SonarMonitorRenderer {
         SonarDisplayLayout.Area plotArea = sideScan ? sideScanLayout.plotArea() : area;
         RenderType quadLayer = forceLabels ? SonarRenderTypes.screenQuads()
                 : SonarRenderTypes.worldQuads();
+        if (snapshot.sonarType()
+                == org.rassvet.create_echo_radars.content.sonar.SonarType.ECHO_SOUNDER_A) {
+            renderEchoSounder(monitor, snapshot, poseStack, buffers, palette, area, displayRange,
+                    quadLayer, forceLabels);
+            return;
+        }
         VertexConsumer backgroundQuads = buffers.getBuffer(quadLayer);
         colorQuad(backgroundQuads, poseStack.last(), area.left(), area.right(), area.bottom(), area.top(),
                 BACKGROUND_DEPTH, sideScan ? 0.016f : 0.002f,
@@ -442,6 +467,167 @@ public final class SonarMonitorRenderer {
                         poseStack, buffers, area.minSize());
             }
         }
+    }
+
+    private static void renderEchoSounder(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
+                                          PoseStack poseStack, MultiBufferSource buffers,
+                                          SonarPalette palette, SonarDisplayLayout.Area area,
+                                          int displayRange, RenderType quadLayer, boolean screen) {
+        VertexConsumer quads = buffers.getBuffer(quadLayer);
+        colorQuad(quads, poseStack.last(), area.left(), area.right(), area.bottom(), area.top(),
+                BACKGROUND_DEPTH, 0.002f, 0.003f, 0.008f, 0.98f);
+
+        List<SonarFrame> frames = clientHistory(monitor, snapshot).frames();
+        EchoSounderDepth.Surface surface = EchoSounderDepth.surface(frames, snapshot.range(),
+                snapshot.horizontalSector(), snapshot.verticalSector(), ECHO_SOUNDER_MAP_RESOLUTION);
+        float depth = EchoSounderDepth.fromFrames(frames, snapshot.range());
+        float unit = area.minSize();
+        SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(area);
+        float size = map.width();
+        float left = map.left();
+        float right = map.right();
+        float bottom = map.bottom();
+        float top = map.top();
+        colorQuad(quads, poseStack.last(), left, right, bottom, top, SECTOR_DEPTH,
+                0.012f, 0.023f, 0.031f, 1);
+        float pixel = size / surface.side();
+        for (int y = 0; y < surface.side(); y++) {
+            for (int x = 0; x < surface.side(); x++) {
+                float cellDepth = surface.depthAt(x, y);
+                if (Float.isNaN(cellDepth)) continue;
+                SonarPalette.Rgb color = palette.color(1 - Math.min(1, cellDepth / displayRange));
+                colorQuad(quads, poseStack.last(), left + x * pixel, left + (x + 1) * pixel,
+                        bottom + y * pixel, bottom + (y + 1) * pixel, ECHO_DEPTH,
+                        color.red(), color.green(), color.blue(), 1);
+            }
+        }
+
+        float line = Math.max(unit * 0.0015f, 0.001f);
+        for (int division = 1; division < 4; division++) {
+            float x = left + size * division / 4f;
+            float z = bottom + size * division / 4f;
+            colorQuad(quads, poseStack.last(), x - line, x + line, bottom, top,
+                    GRID_DEPTH, 0.55f, 0.67f, 0.72f, 0.30f);
+            colorQuad(quads, poseStack.last(), left, right, z - line, z + line,
+                    GRID_DEPTH, 0.55f, 0.67f, 0.72f, 0.30f);
+        }
+        colorQuad(quads, poseStack.last(), left - line, right + line, bottom - line, bottom + line,
+                GRID_DEPTH, 0.65f, 0.76f, 0.8f, 0.8f);
+        colorQuad(quads, poseStack.last(), left - line, right + line, top - line, top + line,
+                GRID_DEPTH, 0.65f, 0.76f, 0.8f, 0.8f);
+        colorQuad(quads, poseStack.last(), left - line, left + line, bottom, top,
+                GRID_DEPTH, 0.65f, 0.76f, 0.8f, 0.8f);
+        colorQuad(quads, poseStack.last(), right - line, right + line, bottom, top,
+                GRID_DEPTH, 0.65f, 0.76f, 0.8f, 0.8f);
+
+        float barLeft = right + unit * 0.055f;
+        float barWidth = unit * 0.042f;
+        for (int step = 0; step < 32; step++) {
+            float z0 = bottom + size * step / 32f;
+            float z1 = bottom + size * (step + 1) / 32f;
+            SonarPalette.Rgb color = palette.color((step + 0.5f) / 32f);
+            colorQuad(quads, poseStack.last(), barLeft, barLeft + barWidth, z0, z1,
+                    ECHO_DEPTH, color.red(), color.green(), color.blue(), 1);
+        }
+        for (int division = 0; division <= 4; division++) {
+            float z = bottom + size * division / 4f;
+            colorQuad(quads, poseStack.last(), barLeft - line, barLeft + barWidth + line,
+                    z - line, z + line, GRID_DEPTH, 0.85f, 0.9f, 0.9f, 0.8f);
+        }
+
+        float labelSize = unit * 1.5f;
+        drawLabel(I18n.get("monitor.create_echo_radars.echo_sounder.depth",
+                        Float.isNaN(depth) ? "--" : Math.round(depth) + "m"),
+                left + size * 0.5f, top + unit * 0.09f,
+                poseStack, buffers, labelSize, 2.3f);
+        drawLabel(I18n.get("monitor.create_echo_radars.echo_sounder.range", displayRange + "m"),
+                left + size * 0.5f, bottom - unit * 0.09f,
+                poseStack, buffers, labelSize, 2.0f);
+        for (int division = 0; division <= 2; division++) {
+            int horizontalAngle = Math.round(snapshot.horizontalSector() * (division - 1) / 2f);
+            int verticalAngle = Math.round(snapshot.verticalSector() * (division - 1) / 2f);
+            String horizontalText = (horizontalAngle > 0 ? "+" : "") + horizontalAngle + "°";
+            String verticalText = (verticalAngle > 0 ? "+" : "") + verticalAngle + "°";
+            drawLabel(horizontalText, left + size * division / 2f, top + unit * 0.037f,
+                    poseStack, buffers, labelSize, 1.7f);
+            drawLabel(horizontalText, left + size * division / 2f, bottom - unit * 0.037f,
+                    poseStack, buffers, labelSize, 1.7f);
+            drawLabel(verticalText, left - unit * 0.025f, bottom + size * division / 2f,
+                    poseStack, buffers, labelSize, 1.5f);
+        }
+        for (int division = 0; division <= 2; division++) {
+            int metres = Math.round(displayRange * (2 - division) / 2f);
+            drawLabel(metres + "m", barLeft + barWidth + unit * 0.033f,
+                    bottom + size * division / 2f,
+                    poseStack, buffers, labelSize, 1.7f);
+        }
+        renderEchoSounderTracks(monitor, snapshot, poseStack, buffers,
+                map, surface, palette, displayRange, screen);
+    }
+
+    private static void renderEchoSounderTracks(MonitorBlockEntity monitor,
+                                                SonarMonitorSnapshot snapshot,
+                                                PoseStack poseStack, MultiBufferSource buffers,
+                                                SonarDisplayLayout.Area map,
+                                                EchoSounderDepth.Surface surface, SonarPalette palette,
+                                                int displayRange, boolean screen) {
+        SonarOrientation orientation = snapshot.displayOrientation();
+        // The marker occupies only a small part of its transparent texture.
+        float radius = map.minSize() * 0.5f;
+        for (RadarTrack track : monitor.getTracks()) {
+            Vec3 relative = track.position().subtract(snapshot.displayOrigin());
+            if (!SonarMath.insideCone(relative, orientation, snapshot.horizontalSector(),
+                    snapshot.verticalSector(), snapshot.range())
+                    || !SonarDisplayLayout.trackInsideDisplayRange(relative.length(), displayRange)) {
+                continue;
+            }
+            SonarMath.Projection projection = SonarMath.project(relative, orientation);
+            double elevation = Math.toDegrees(Math.atan2(projection.up(),
+                    Math.hypot(projection.forward(), projection.side())));
+            SonarDisplayProjection.Point point = EchoSounderDepth.angularPoint(
+                    projection.bearingDegrees(), elevation,
+                    snapshot.horizontalSector(), snapshot.verticalSector());
+            if (point == null) continue;
+            float x = map.centerX() + (float) point.x() * map.width() * 0.5f;
+            float z = map.centerZ() + (float) point.z() * map.height() * 0.5f;
+            Color color = trackColor(monitor, track);
+            float depth = surface.depthAtPosition(map, x, z);
+            SonarPalette.Rgb background = Float.isNaN(depth)
+                    ? new SonarPalette.Rgb(0.012f, 0.023f, 0.031f)
+                    : palette.color(1 - Math.min(1, depth / displayRange));
+            SonarPalette.Rgb marker = contrastingMarkerColor(background, color);
+            renderSprite(track.getSprite(), poseStack, buffers, x, z, radius,
+                    marker.red(), marker.green(), marker.blue(), 1);
+            if (track.id().equals(monitor.getSelectedEntity())) {
+                renderSprite(MonitorSprite.TARGET_SELECTED, poseStack, buffers, x, z,
+                        radius, 1, 1, 1, 1);
+            }
+            renderTrackLabel(track, monitor, poseStack, buffers, map, x, z, screen);
+        }
+    }
+
+    private static SonarPalette.Rgb contrastingMarkerColor(SonarPalette.Rgb background, Color original) {
+        double backgroundLuminance = luminance(background.red(), background.green(), background.blue());
+        double markerLuminance = luminance(original.getRedAsFloat(), original.getGreenAsFloat(),
+                original.getBlueAsFloat());
+        double lighter = Math.max(backgroundLuminance, markerLuminance);
+        double darker = Math.min(backgroundLuminance, markerLuminance);
+        if ((lighter + 0.05) / (darker + 0.05) >= 4.5) {
+            return new SonarPalette.Rgb(original.getRedAsFloat(), original.getGreenAsFloat(),
+                    original.getBlueAsFloat());
+        }
+        return backgroundLuminance > 0.179
+                ? new SonarPalette.Rgb(0, 0, 0)
+                : new SonarPalette.Rgb(1, 1, 1);
+    }
+
+    private static double luminance(float red, float green, float blue) {
+        return 0.2126 * linearColor(red) + 0.7152 * linearColor(green)
+                + 0.0722 * linearColor(blue);
+    }
+
+    private static double linearColor(float channel) {
+        return channel <= 0.04045f ? channel / 12.92 : Math.pow((channel + 0.055) / 1.055, 2.4);
     }
 
     private static void renderSideScanData(PoseStack poseStack, MultiBufferSource buffers,
