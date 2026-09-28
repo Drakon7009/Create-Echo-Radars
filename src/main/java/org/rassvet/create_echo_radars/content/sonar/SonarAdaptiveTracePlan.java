@@ -4,8 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class SonarAdaptiveTracePlan {
-    private static final double REFINEMENT_WORLD_OFFSET = 0.75;
-
     private SonarAdaptiveTracePlan() {}
 
     public static Settings settings(int range, int sector, int horizontalBeams, int verticalBeams,
@@ -65,12 +63,12 @@ public final class SonarAdaptiveTracePlan {
     private static List<Leaf> refinementsForHit(Leaf leaf, double hitDistance, Settings settings,
                                                 double bearingCenter, double pitchCenter) {
         if (leaf.refinement || settings.hitRefinementBacktrackBlocks <= 0) return List.of();
-        double start = Math.max(0, hitDistance - settings.hitRefinementBacktrackBlocks);
-        double resolution = refinementOffsetDegrees(hitDistance);
         double currentBearing = bearing(leaf, settings);
         double currentPitch = pitch(leaf, settings);
-        double horizontalRadius = Math.min(resolution, horizontalStep(settings) * 0.5);
-        double verticalRadius = Math.min(resolution, verticalStep(settings) * 0.5);
+        // Each primary ray owns the angular cell halfway to its neighbours.
+        // A fixed world-space offset clusters refinements around distant hits.
+        double horizontalRadius = horizontalStep(settings) * 0.5;
+        double verticalRadius = verticalStep(settings) * 0.5;
         double minimumBearing = bearingCenter - settings.sector / 2.0;
         double maximumBearing = bearingCenter + settings.sector / 2.0;
         double minimumPitch = pitchCenter - settings.verticalSector / 2.0;
@@ -90,14 +88,15 @@ public final class SonarAdaptiveTracePlan {
             double verticalSample = radicalInverseBase2(i + 1);
             double bearingOffset = lerp(-negativeBearing, positiveBearing, horizontalSample);
             double pitchOffset = lerp(-negativePitch, positivePitch, verticalSample);
+            double angularOffset = Math.min(89, Math.hypot(bearingOffset, pitchOffset));
+            double lateralSeparation = hitDistance * Math.tan(Math.toRadians(angularOffset));
+            double backtrack = Math.max(settings.hitRefinementBacktrackBlocks, lateralSeparation);
+            double start = Math.max(0, hitDistance - backtrack);
+            double resolution = (negativeBearing + positiveBearing) / settings.additionalRays;
             refinements.add(refinementLeaf(leaf, leaf.bearingOffset + bearingOffset,
                     leaf.pitchOffset + pitchOffset, start, resolution, settings));
         }
         return List.copyOf(refinements);
-    }
-
-    public static double refinementOffsetDegrees(double hitDistance) {
-        return Math.toDegrees(Math.atan(REFINEMENT_WORLD_OFFSET / Math.max(1, hitDistance)));
     }
 
     public static float baseAngularResolutionDegrees(Settings settings) {
