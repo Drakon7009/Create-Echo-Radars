@@ -11,6 +11,9 @@ run/
 .agents/
 .codex/
 
+# Local draft for the CurseForge project page
+/CURSEFORGE.md
+
 # External projects intentionally not part of this mod
 sonar_simulation/
 Create-Radar-master/
