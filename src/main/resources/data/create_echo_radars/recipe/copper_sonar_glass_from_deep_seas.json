@@ -1,0 +1,13 @@
+{
+  "neoforge:conditions": [
+    { "type": "neoforge:mod_loaded", "modid": "create_submarine" },
+    { "type": "neoforge:item_exists", "item": "create_submarine:copper_pressurizer" }
+  ],
+  "type": "minecraft:crafting_shapeless",
+  "category": "building",
+  "ingredients": [
+    { "item": "create_submarine:copper_pressurizer" },
+    { "item": "create:electron_tube" }
+  ],
+  "result": { "id": "create_echo_radars:copper_sonar_glass", "count": 1 }
+}
