@@ -4,6 +4,7 @@ import com.happysg.radar.block.behavior.networks.NetworkData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
+import org.rassvet.create_echo_radars.content.sonar.SonarBlock;
 import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockEntity;
 
 import java.util.HashMap;
@@ -44,7 +45,8 @@ public final class SonarGlassNetworkManager {
         Map<Long, SonarGlassBlockEntity> displays = new HashMap<>();
         NetworkData network = NetworkData.get(level);
         for (NetworkData.Group group : network.getGroupsByFiltererView().values()) {
-            if (group.radarPos == null || !(level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity sonar)) {
+            if (group.radarPos == null || !(level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity sonar)
+                    || !isLiveSource(level, sonar)) {
                 continue;
             }
             if (!sonar.isEmitterSubmerged()) continue;
@@ -64,7 +66,7 @@ public final class SonarGlassNetworkManager {
                     level, summator.glassTarget());
             if (display == null) continue;
             for (SonarBlockEntity sonar : summator.linkedSonars(level)) {
-                if (sonar.isEmitterSubmerged()) {
+                if (isLiveSource(level, sonar) && sonar.isEmitterSubmerged()) {
                     addSource(sourcesByDisplay, displays, display, sonar);
                 }
             }
@@ -83,6 +85,7 @@ public final class SonarGlassNetworkManager {
                 state.nextCycle = now;
             }
             int signature = entry.getValue().keySet().hashCode();
+            state.sourcePositions = Set.copyOf(entry.getValue().keySet());
             if (signature != state.sourceSignature) {
                 state.sourceSignature = signature;
                 state.nextCycle = now;
@@ -120,8 +123,36 @@ public final class SonarGlassNetworkManager {
     }
 
     public void refreshNow(BlockPos endpoint, long now) {
-        states.put(endpoint.asLong(), new State(now));
+        states.computeIfAbsent(endpoint.asLong(), ignored -> new State(now));
         for (State state : states.values()) state.nextCycle = now;
+    }
+
+    public void onSonarRemoved(ServerLevel level, BlockPos sonarPos) {
+        summators.removeIf(summator -> summator.isRemoved()
+                || summator.getLevel() != level);
+        for (SonarSignalSummatorBlockEntity summator : List.copyOf(summators)) {
+            summator.onSonarRemoved(level, sonarPos);
+        }
+        long source = sonarPos.asLong();
+        Iterator<Map.Entry<Long, State>> iterator = states.entrySet().iterator();
+        while (iterator.hasNext()) {
+            Map.Entry<Long, State> entry = iterator.next();
+            State state = entry.getValue();
+            if (!state.sourcePositions.contains(source)) continue;
+            if (state.sourcePositions.size() > 1) {
+                state.sourcePositions = state.sourcePositions.stream()
+                        .filter(position -> position != source)
+                        .collect(java.util.stream.Collectors.toUnmodifiableSet());
+                state.nextCycle = level.getGameTime();
+                continue;
+            }
+            BlockPos displayPos = state.displayPos == null
+                    ? BlockPos.of(entry.getKey()) : state.displayPos;
+            if (level.getBlockEntity(displayPos) instanceof SonarGlassBlockEntity glass) {
+                glass.clearState();
+            }
+            iterator.remove();
+        }
     }
 
     public void registerSummator(SonarSignalSummatorBlockEntity summator) {
@@ -192,6 +223,11 @@ public final class SonarGlassNetworkManager {
                 .put(sonar.getBlockPos().asLong(), sonar);
     }
 
+    private static boolean isLiveSource(ServerLevel level, SonarBlockEntity sonar) {
+        return !sonar.isRemoved()
+                && level.getBlockState(sonar.getBlockPos()).getBlock() instanceof SonarBlock;
+    }
+
     private static @Nullable SonarGlassBlockEntity displayEntity(
             ServerLevel level, BlockPos endpoint) {
         if (!SonarGlass.isGlass(level, endpoint)) return null;
@@ -213,6 +249,7 @@ public final class SonarGlassNetworkManager {
         private boolean disconnecting;
         private BlockPos displayPos;
         private int sourceSignature;
+        private Set<Long> sourcePositions = Set.of();
 
         private State(long nextCycle) { this.nextCycle = nextCycle; }
     }
