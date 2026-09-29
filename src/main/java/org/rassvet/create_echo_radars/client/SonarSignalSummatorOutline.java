@@ -18,6 +18,7 @@ public final class SonarSignalSummatorOutline {
     private static final Object OUTLINE_SLOT = new Object();
     private static final double OUTLINE_HALF_SIZE = 0.125;
     private static final int OUTLINE_COLOR = 0xAAAAAA;
+    private static final int BROKEN_OUTLINE_COLOR = 0xFF3333;
 
     private SonarSignalSummatorOutline() {}
 
@@ -29,14 +30,16 @@ public final class SonarSignalSummatorOutline {
 
         ItemStack main = minecraft.player.getMainHandItem();
         ItemStack off = minecraft.player.getOffhandItem();
-        if (!(main.getItem() instanceof DataLinkBlockItem)
-                && !(off.getItem() instanceof DataLinkBlockItem)) return;
+        boolean holdingDataLink = main.getItem() instanceof DataLinkBlockItem
+                || off.getItem() instanceof DataLinkBlockItem;
         if (!(minecraft.level.getBlockEntity(hit.getBlockPos())
                 instanceof SonarSignalSummatorBlockEntity summator)) return;
 
         int slot = SonarSignalSummatorBlock.slotAt(summator.getBlockState(),
                 summator.getBlockPos(), hit);
         if (slot < 0) return;
+        boolean broken = summator.isAntennaBroken(slot);
+        if (!broken && !holdingDataLink) return;
 
         Vec3 center = SonarSignalSummatorBlock.slotCenter(
                 summator.getBlockState(), slot).add(Vec3.atLowerCornerOf(hit.getBlockPos()));
@@ -47,7 +50,7 @@ public final class SonarSignalSummatorOutline {
                 center.y + OUTLINE_HALF_SIZE,
                 center.z + OUTLINE_HALF_SIZE);
         Outliner.getInstance().chaseAABB(OUTLINE_SLOT, outline)
-                .colored(OUTLINE_COLOR)
+                .colored(broken ? BROKEN_OUTLINE_COLOR : OUTLINE_COLOR)
                 .withFaceTexture(AllSpecialTextures.CUTOUT_CHECKERED)
                 .lineWidth(0.020f);
     }

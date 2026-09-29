@@ -32,6 +32,7 @@ import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.rassvet.create_echo_radars.CreateEchoRadars;
+import org.rassvet.create_echo_radars.content.glass.SonarGlassNetworkManager;
 
 public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity>, SimpleWaterloggedBlock {
     public static final net.minecraft.world.level.block.state.properties.DirectionProperty FACING =
@@ -145,6 +146,9 @@ public class SonarBlock extends KineticBlock implements IBE<SonarBlockEntity>, S
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean moving) {
         if (!state.is(newState.getBlock()) && !level.isClientSide && level instanceof ServerLevel serverLevel) {
+            if (!moving) {
+                SonarGlassNetworkManager.get(serverLevel).onSonarRemoved(serverLevel, pos);
+            }
             if (!moving && level.getBlockEntity(pos) instanceof SonarBlockEntity sonar
                     && sonar.hasDataLink()) {
                 BlockPos linkPos = sonar.getDataLinkPos();

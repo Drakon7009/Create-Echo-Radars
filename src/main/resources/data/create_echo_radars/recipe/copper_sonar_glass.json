@@ -7,5 +7,5 @@
     "E": { "item": "create:electron_tube" },
     "C": { "item": "minecraft:copper_block" }
   },
-  "result": { "id": "create_echo_radars:copper_sonar_glass", "count": 8 }
+  "result": { "id": "create_echo_radars:copper_sonar_glass", "count": 1 }
 }
