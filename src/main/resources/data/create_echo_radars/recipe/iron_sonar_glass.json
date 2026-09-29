@@ -7,5 +7,5 @@
     "E": { "item": "create:electron_tube" },
     "I": { "item": "create:industrial_iron_block" }
   },
-  "result": { "id": "create_echo_radars:iron_sonar_glass", "count": 8 }
+  "result": { "id": "create_echo_radars:iron_sonar_glass", "count": 1 }
 }
