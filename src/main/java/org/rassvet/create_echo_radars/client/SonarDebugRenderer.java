@@ -37,9 +37,12 @@ import org.rassvet.create_echo_radars.content.sonar.SonarOrientation;
 import org.rassvet.create_echo_radars.content.sonar.SonarRangeLimit;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 import org.rassvet.create_echo_radars.content.sonar.SonarVoxelDda;
+import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockEntity;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.HashMap;
+import java.util.Map;
 
 public final class SonarDebugRenderer {
     private static final int SHELL_SEGMENTS = 32;
@@ -49,7 +52,7 @@ public final class SonarDebugRenderer {
 
     private static BlockPos selectedPos;
     private static net.minecraft.resources.ResourceKey<Level> selectedDimension;
-    private static List<Ray> tracedRays = List.of();
+    private static final Map<BlockPos, List<Ray>> tracedRays = new HashMap<>();
     private static long lastTraceTick = Long.MIN_VALUE;
     private static SonarDebugRayMode lastRayMode;
     private static AnglePreview anglePreview;
@@ -67,7 +70,7 @@ public final class SonarDebugRenderer {
         }
         selectedPos = null;
         selectedDimension = null;
-        tracedRays = List.of();
+        tracedRays.clear();
         SonarType type = sonar.getSonarType();
         int clampedHorizontal = Math.max(SonarBlockEntity.MIN_ANGLE,
                 Math.min(type.maximumHorizontalAngle(), horizontalSector));
@@ -124,9 +127,11 @@ public final class SonarDebugRenderer {
     }
 
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
+        var clicked = event.getLevel().getBlockEntity(event.getPos());
         if (!event.getLevel().isClientSide()
                 || !event.getItemStack().is(CreateEchoRadars.SONAR_DEBUG_TOOL.get())
-                || !(event.getLevel().getBlockEntity(event.getPos()) instanceof SonarBlockEntity)) {
+                || !(clicked instanceof SonarBlockEntity
+                || clicked instanceof SonarSignalSummatorBlockEntity)) {
             return;
         }
 
@@ -135,14 +140,18 @@ public final class SonarDebugRenderer {
         if (!disabling) anglePreview = null;
         selectedPos = disabling ? null : event.getPos().immutable();
         selectedDimension = disabling ? null : event.getLevel().dimension();
-        tracedRays = List.of();
+        tracedRays.clear();
         lastTraceTick = Long.MIN_VALUE;
         lastRayMode = null;
 
         if (event.getEntity() == Minecraft.getInstance().player) {
-            event.getEntity().displayClientMessage(Component.translatable(disabling
-                    ? "message.create_echo_radars.debug_disabled"
-                    : "message.create_echo_radars.debug_enabled"), true);
+            Component message = disabling
+                    ? Component.translatable("message.create_echo_radars.debug_disabled")
+                    : clicked instanceof SonarSignalSummatorBlockEntity summator
+                    ? Component.translatable("message.create_echo_radars.summator_debug_enabled",
+                            summator.linkedSonarPositions().size())
+                    : Component.translatable("message.create_echo_radars.debug_enabled");
+            event.getEntity().displayClientMessage(message, true);
         }
         event.setCancellationResult(InteractionResult.SUCCESS);
         event.setCanceled(true);
@@ -159,37 +168,62 @@ public final class SonarDebugRenderer {
 
     private static void renderDebugSelection(RenderLevelStageEvent event, Level level) {
         if (selectedPos == null || !level.dimension().equals(selectedDimension)) return;
-        if (!(level.getBlockEntity(selectedPos) instanceof SonarBlockEntity sonar)) {
+        var selected = level.getBlockEntity(selectedPos);
+        if (!(selected instanceof SonarBlockEntity)
+                && !(selected instanceof SonarSignalSummatorBlockEntity)) {
             selectedPos = null;
             selectedDimension = null;
-            tracedRays = List.of();
+            tracedRays.clear();
             return;
         }
 
-        Vec3 origin = sonar.emitterPosition();
-        SonarOrientation orientation = sonar.orientation();
-        int range = sonar.getSonarRange();
-        int sector = sonar.getHorizontalSector();
-        int verticalSector = sonar.getVerticalSector();
+        if (selected instanceof SonarBlockEntity sonar) {
+            renderSelectedSonars(event, level, List.of(sonar));
+        } else if (selected instanceof SonarSignalSummatorBlockEntity summator) {
+            List<SonarBlockEntity> sonars = new ArrayList<>();
+            for (BlockPos pos : summator.linkedSonarPositions()) {
+                if (level.hasChunkAt(pos)
+                        && level.getBlockEntity(pos) instanceof SonarBlockEntity sonar) {
+                    sonars.add(sonar);
+                }
+            }
+            renderSelectedSonars(event, level, sonars);
+        }
+    }
+
+    private static void renderSelectedSonars(RenderLevelStageEvent event, Level level,
+                                             List<SonarBlockEntity> sonars) {
         long gameTime = level.getGameTime();
         SonarDebugRayMode rayMode = ClientConfig.debugRayMode();
         if (rayMode != lastRayMode || gameTime - lastTraceTick >= 5 || lastTraceTick == Long.MIN_VALUE) {
-            List<Ray> nextRays = new ArrayList<>();
-            if (rayMode.tracesAnything()) {
-                nextRays.addAll(traceRays(level, origin, orientation, range, sector, verticalSector,
-                        sonar.getTiltAngle(), sonar.getSonarType(), rayMode));
+            tracedRays.clear();
+            for (SonarBlockEntity sonar : sonars) {
+                Vec3 origin = sonar.emitterPosition();
+                SonarOrientation orientation = sonar.orientation();
+                int range = sonar.getSonarRange();
+                int sector = sonar.getHorizontalSector();
+                int verticalSector = sonar.getVerticalSector();
+                List<Ray> nextRays = new ArrayList<>();
+                if (rayMode.tracesAnything()) {
+                    nextRays.addAll(traceRays(level, origin, orientation, range, sector, verticalSector,
+                            sonar.getTiltAngle(), sonar.getSonarType(), rayMode));
+                }
+                if (rayMode == SonarDebugRayMode.ALL && SyncedServerConfig.entityOcclusionCheck()) {
+                    nextRays.addAll(traceEntityVisibilityRays(level, sonar, origin, orientation,
+                            range, sector, verticalSector));
+                }
+                tracedRays.put(sonar.getBlockPos(), List.copyOf(nextRays));
             }
-            if (rayMode == SonarDebugRayMode.ALL && SyncedServerConfig.entityOcclusionCheck()) {
-                nextRays.addAll(traceEntityVisibilityRays(level, sonar, origin, orientation,
-                        range, sector, verticalSector));
-            }
-            tracedRays = List.copyOf(nextRays);
             lastTraceTick = gameTime;
             lastRayMode = rayMode;
         }
-        renderGeometry(event.getPoseStack(), event.getCamera().getPosition(),
-                origin, orientation, range, sector, verticalSector,
-                sonar.getTiltAngle(), sonar.getSonarType(), tracedRays, true);
+        for (SonarBlockEntity sonar : sonars) {
+            renderGeometry(event.getPoseStack(), event.getCamera().getPosition(),
+                    sonar.emitterPosition(), sonar.orientation(), sonar.getSonarRange(),
+                    sonar.getHorizontalSector(), sonar.getVerticalSector(),
+                    sonar.getTiltAngle(), sonar.getSonarType(),
+                    tracedRays.getOrDefault(sonar.getBlockPos(), List.of()), true);
+        }
     }
 
     private static void renderAnglePreview(RenderLevelStageEvent event, Minecraft minecraft, Level level) {
