@@ -145,6 +145,7 @@
   "config.create_echo_radars.apply": "Apply",
   "item.create_echo_radars.sonar_debug_tool": "Sonar Debug Tracer",
   "message.create_echo_radars.debug_enabled": "Sonar tracing enabled",
+  "message.create_echo_radars.summator_debug_enabled": "Summator sonar tracing enabled (%s)",
   "message.create_echo_radars.debug_disabled": "Sonar tracing disabled",
   "message.create_echo_radars.angle_preview_enabled": "Sonar angle preview enabled for 5 minutes",
   "message.create_echo_radars.angle_preview_disabled": "Sonar angle preview disabled",

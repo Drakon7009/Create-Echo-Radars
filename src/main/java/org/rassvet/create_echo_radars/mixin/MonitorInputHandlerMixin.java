@@ -81,7 +81,7 @@ public abstract class MonitorInputHandlerMixin {
                             snapshot.horizontalSector(), snapshot.verticalSector());
                     if (angular == null) continue;
                     SonarDisplayLayout.Area display = SonarDisplayLayout.area(dimensions);
-                    SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(display);
+                    SonarDisplayLayout.Area map = EchoSounderDepth.worldMapArea(display);
                     double sourceX = map.centerX() + angular.x() * map.width() * 0.5;
                     double sourceZ = map.centerZ() + angular.z() * map.height() * 0.5;
                     projected = new SonarDisplayProjection.Point(

@@ -27,6 +27,7 @@ import java.util.Map;
 
 public final class SonarSignalSummatorBlockEntity extends BlockEntity {
     private final BlockPos[] filterers = new BlockPos[SonarSignalSummatorBlock.SLOT_COUNT];
+    private final BlockPos[] linkedSonarPositions = new BlockPos[SonarSignalSummatorBlock.SLOT_COUNT];
     private BlockPos glassTarget;
     private int brokenSlots;
 
@@ -38,6 +39,7 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
         if (!(level instanceof ServerLevel serverLevel) || level.getGameTime() % 20 != 0) return;
         SonarGlassNetworkManager.get(serverLevel).registerSummator(summator);
         summator.refreshBrokenSlots(serverLevel);
+        summator.refreshLinkedSonarPositions(serverLevel);
     }
 
     public void setGlassTarget(BlockPos target) {
@@ -60,6 +62,36 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
 
     public boolean isAntennaBroken(int slot) {
         return hasAntenna(slot) && (brokenSlots & (1 << slot)) != 0;
+    }
+
+    public List<BlockPos> linkedSonarPositions() {
+        List<BlockPos> positions = new ArrayList<>();
+        for (BlockPos pos : linkedSonarPositions) {
+            if (pos != null && !positions.contains(pos)) positions.add(pos);
+        }
+        return List.copyOf(positions);
+    }
+
+    private void refreshLinkedSonarPositions(ServerLevel level) {
+        NetworkData data = NetworkData.get(level);
+        boolean changed = false;
+        for (int slot = 0; slot < filterers.length; slot++) {
+            BlockPos filterer = filterers[slot];
+            BlockPos sonarPos = null;
+            if (filterer != null && level.hasChunkAt(filterer)
+                    && level.getBlockEntity(filterer) instanceof NetworkFiltererBlockEntity) {
+                NetworkData.Group group = data.getGroup(level.dimension(), filterer);
+                if (group != null && group.radarPos != null && level.hasChunkAt(group.radarPos)
+                        && level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity) {
+                    sonarPos = group.radarPos;
+                }
+            }
+            if (!java.util.Objects.equals(linkedSonarPositions[slot], sonarPos)) {
+                linkedSonarPositions[slot] = sonarPos == null ? null : sonarPos.immutable();
+                changed = true;
+            }
+        }
+        if (changed) sync();
     }
 
     public void onSonarRemoved(ServerLevel level, BlockPos sonarPos) {
@@ -121,7 +153,10 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
         if (slot < 0 || slot >= filterers.length || filterers[slot] != null
                 || hasFilterer(filterer)) return false;
         filterers[slot] = filterer.immutable();
-        if (level instanceof ServerLevel serverLevel) refreshBrokenSlots(serverLevel);
+        if (level instanceof ServerLevel serverLevel) {
+            refreshBrokenSlots(serverLevel);
+            refreshLinkedSonarPositions(serverLevel);
+        }
         sync();
         refreshOutput();
         return true;
@@ -130,6 +165,7 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
     public boolean removeAntenna(int slot) {
         if (slot < 0 || slot >= filterers.length || filterers[slot] == null) return false;
         filterers[slot] = null;
+        linkedSonarPositions[slot] = null;
         brokenSlots &= ~(1 << slot);
         sync();
         refreshOutput();
@@ -212,6 +248,15 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
             slots.add(entry);
         }
         tag.put("Antennas", slots);
+        ListTag linked = new ListTag();
+        for (int i = 0; i < linkedSonarPositions.length; i++) {
+            if (linkedSonarPositions[i] == null) continue;
+            CompoundTag entry = new CompoundTag();
+            entry.putInt("Slot", i);
+            entry.putLong("Sonar", linkedSonarPositions[i].asLong());
+            linked.add(entry);
+        }
+        tag.put("LinkedSonars", linked);
         tag.putInt("BrokenSlots", brokenSlots);
     }
 
@@ -221,6 +266,7 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
         glassTarget = tag.contains("GlassTarget")
                 ? BlockPos.of(tag.getLong("GlassTarget")) : null;
         Arrays.fill(filterers, null);
+        Arrays.fill(linkedSonarPositions, null);
         brokenSlots = tag.getInt("BrokenSlots");
         ListTag slots = tag.getList("Antennas", Tag.TAG_COMPOUND);
         for (int i = 0; i < slots.size(); i++) {
@@ -228,6 +274,14 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
             int slot = entry.getInt("Slot");
             if (slot >= 0 && slot < filterers.length) {
                 filterers[slot] = BlockPos.of(entry.getLong("Filterer"));
+            }
+        }
+        ListTag linked = tag.getList("LinkedSonars", Tag.TAG_COMPOUND);
+        for (int i = 0; i < linked.size(); i++) {
+            CompoundTag entry = linked.getCompound(i);
+            int slot = entry.getInt("Slot");
+            if (slot >= 0 && slot < linkedSonarPositions.length && filterers[slot] != null) {
+                linkedSonarPositions[slot] = BlockPos.of(entry.getLong("Sonar"));
             }
         }
     }

@@ -1,6 +1,7 @@
 package org.rassvet.create_echo_radars.mixin;
 
 import com.happysg.radar.block.monitor.MonitorBlockEntity;
+import com.happysg.radar.block.monitor.MonitorBlock;
 import com.happysg.radar.block.behavior.networks.config.DetectionConfig;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -15,6 +16,7 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import net.minecraft.nbt.Tag;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -44,6 +46,14 @@ public abstract class MonitorBlockEntityMixin implements SonarMonitorExtension {
     private int createEchoRadars$monitorHeight = 1;
     @Unique
     private boolean createEchoRadars$syntheticSnapshot;
+
+    @Inject(method = "getControllerPos", at = @At("HEAD"), cancellable = true)
+    private void createEchoRadars$singleMonitorControlsItself(CallbackInfoReturnable<BlockPos> cir) {
+        MonitorBlockEntity self = (MonitorBlockEntity) (Object) this;
+        if (self.getSize() == 1 && self.getBlockState().getBlock() instanceof MonitorBlock) {
+            cir.setReturnValue(self.getBlockPos());
+        }
+    }
 
     @Inject(method = "write", at = @At("TAIL"))
     private void createEchoRadars$writeSonar(CompoundTag tag, HolderLookup.Provider registries,
