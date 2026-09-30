@@ -1,5 +1,8 @@
 package org.rassvet.create_echo_radars.content.sonar;
 
+import com.happysg.radar.block.arad.rwr.RadarType;
+import com.happysg.radar.block.arad.rwr.RwrContactEvaluation;
+import com.happysg.radar.block.arad.rwr.RwrTargetReference;
 import com.happysg.radar.block.behavior.networks.INetworkNode;
 import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.radar.behavior.IRadar;
@@ -35,12 +38,14 @@ import org.jetbrains.annotations.Nullable;
 import org.rassvet.create_echo_radars.config.ServerConfig;
 import org.rassvet.create_echo_radars.config.SyncedServerConfig;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 
 public class SonarBlockEntity extends KineticBlockEntity
         implements IRadar, SonarDataSource, MenuProvider, INetworkNode {
@@ -492,6 +497,24 @@ public class SonarBlockEntity extends KineticBlockEntity
     @Override
     public String getRadarType() {
         return "sonar";
+    }
+
+    // Radars 5.0-EA added these IRadar methods. They are harmless on 0.4.9.4.
+    public UUID getEmitterId() {
+        String dimension = level == null ? "unknown" : level.dimension().location().toString();
+        String identity = dimension + ":" + worldPosition.asLong();
+        return UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8));
+    }
+
+    public RadarType getRadarTypeEnum() {
+        return RadarType.GROUND;
+    }
+
+    public RwrContactEvaluation evaluateRwrContact(ServerLevel serverLevel,
+                                                    RwrTargetReference receiver,
+                                                    RwrTargetReference lockTarget) {
+        // Acoustic sonar does not emit a signal detectable by radar warning receivers.
+        return RwrContactEvaluation.notEmitting();
     }
 
     @Override
