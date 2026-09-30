@@ -9,10 +9,27 @@ public final class EchoSounderDepth {
 
     public static SonarDisplayLayout.Area mapArea(SonarDisplayLayout.Area display) {
         float unit = display.minSize();
-        float size = Math.min(display.height() * 0.76f, display.width() - unit * 0.24f);
-        float left = display.left() + unit * 0.055f;
+        float size = Math.min(display.height() * 0.68f, display.width() - unit * 0.32f);
+        float left = display.left() + unit * 0.075f;
         float bottom = display.centerZ() - size * 0.5f;
         return new SonarDisplayLayout.Area(left, left + size, bottom, bottom + size);
+    }
+
+    public static SonarDisplayLayout.Area worldMapArea(SonarDisplayLayout.Area display) {
+        if (display.width() == 1 && display.height() == 1) {
+            // The single monitor model has a 2..14 pixel opening on a 16 pixel face.
+            return inset(display, 2f / 16f);
+        }
+        return mapArea(display);
+    }
+
+    public static SonarDisplayLayout.Area worldScreenArea(SonarDisplayLayout.Area display) {
+        return inset(display, 2f / 16f);
+    }
+
+    private static SonarDisplayLayout.Area inset(SonarDisplayLayout.Area display, float amount) {
+        return new SonarDisplayLayout.Area(display.left() + amount, display.right() - amount,
+                display.bottom() + amount, display.top() - amount);
     }
 
     public static SonarDisplayProjection.Point angularPoint(double bearing, double elevation,
