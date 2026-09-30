@@ -145,6 +145,7 @@
   "config.create_echo_radars.apply": "Применить",
   "item.create_echo_radars.sonar_debug_tool": "Отладочный трассировщик сонара",
   "message.create_echo_radars.debug_enabled": "Трассировка сонара включена",
+  "message.create_echo_radars.summator_debug_enabled": "Трассировка сонаров сумматора включена (%s)",
   "message.create_echo_radars.debug_disabled": "Трассировка сонара выключена",
   "message.create_echo_radars.angle_preview_enabled": "Предпросмотр углов включён на 5 минут",
   "message.create_echo_radars.angle_preview_disabled": "Предпросмотр углов выключен",
