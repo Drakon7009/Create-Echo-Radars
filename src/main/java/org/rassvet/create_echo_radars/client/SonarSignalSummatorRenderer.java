@@ -3,6 +3,7 @@ package org.rassvet.create_echo_radars.client;
 import com.happysg.radar.block.datalink.DataLinkBlock;
 import com.happysg.radar.registry.ModBlocks;
 import com.mojang.blaze3d.vertex.PoseStack;
+import com.mojang.math.Axis;
 import com.simibubi.create.foundation.blockEntity.renderer.SafeBlockEntityRenderer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.MultiBufferSource;
@@ -19,6 +20,8 @@ import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockE
 public final class SonarSignalSummatorRenderer
         extends SafeBlockEntityRenderer<SonarSignalSummatorBlockEntity> {
     private static final double ANTENNA_SCALE = 0.22;
+    private static final double ANTENNA_PANEL_UP = 0.25 / 16.0;
+    private static final float PANEL_TILT_DEGREES = 22.5f;
 
     public SonarSignalSummatorRenderer(BlockEntityRendererProvider.Context context) {
     }
@@ -39,11 +42,18 @@ public final class SonarSignalSummatorRenderer
             if (!summator.hasAntenna(slot)) continue;
             Vec3 center = SonarSignalSummatorBlock.slotCenter(summatorState, slot);
             poseStack.pushPose();
-            poseStack.translate(center.x - ANTENNA_SCALE * 0.5,
-                    center.y - ANTENNA_SCALE * 0.5,
-                    center.z - ANTENNA_SCALE * 0.5);
+            poseStack.translate(center.x, center.y, center.z);
+            switch (facing) {
+                case NORTH -> poseStack.mulPose(Axis.XP.rotationDegrees(PANEL_TILT_DEGREES));
+                case EAST -> poseStack.mulPose(Axis.ZP.rotationDegrees(PANEL_TILT_DEGREES));
+                case SOUTH -> poseStack.mulPose(Axis.XP.rotationDegrees(-PANEL_TILT_DEGREES));
+                case WEST -> poseStack.mulPose(Axis.ZP.rotationDegrees(-PANEL_TILT_DEGREES));
+                default -> { }
+            }
+            poseStack.translate(0, ANTENNA_PANEL_UP, 0);
             poseStack.scale((float) ANTENNA_SCALE, (float) ANTENNA_SCALE,
                     (float) ANTENNA_SCALE);
+            poseStack.translate(-0.5, -0.5, -0.5);
             Minecraft.getInstance().getBlockRenderer().getModelRenderer().renderModel(
                     poseStack.last(), buffers.getBuffer(RenderType.cutout()),
                     antennaState, antennaModel, 1.0f, 1.0f, 1.0f,
