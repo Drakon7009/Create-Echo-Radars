@@ -49,8 +49,7 @@ public final class SonarMonitorRenderer {
     private static final float SWEEP_DEPTH = 0.949f;
     private static final float ECHO_DEPTH = 0.952f;
     private static final float TRACK_DEPTH = 0.957f;
-    private static final float LABEL_DEPTH = 0.975f;
-    private static final float ECHO_SOUNDER_LABEL_DEPTH = 0.960f;
+    private static final float LABEL_DEPTH = 0.960f;
     private static final float LABEL_SCALE = 1.45f;
     private static final float RANGE_LABEL_BEARING_FRACTION = 0.375f;
     private static final float SIDE_SCAN_LABEL_SCALE = 1.70f;
@@ -121,6 +120,10 @@ public final class SonarMonitorRenderer {
         int displayRange = displayRange(snapshot);
         SonarPalette palette = ClientConfig.palette();
 
+        if (!overrideHover && snapshot.sonarType()
+                != org.rassvet.create_echo_radars.content.sonar.SonarType.ECHO_SOUNDER_A) {
+            area = EchoSounderDepth.worldScreenArea(area);
+        }
         if (snapshot.sonarType() != org.rassvet.create_echo_radars.content.sonar.SonarType.FORWARD_LOOKING_F) {
             renderSpecialized(monitor, snapshot, poseStack, buffers, palette, area, displayRange,
                     partialTick, overrideHover);
@@ -459,7 +462,8 @@ public final class SonarMonitorRenderer {
         renderSpecializedGrid(snapshot, poseStack, buffers, plotArea);
         renderSpecializedTracks(monitor, snapshot, poseStack, buffers, plotArea, displayRange,
                 forceLabels);
-        if (area.minSize() >= 2 || forceLabels) {
+        if (forceLabels || ((SonarMonitorExtension) monitor)
+                .createEchoRadars$getMonitorDimensions().min() >= 2) {
             if (sideScan) {
                 renderSideScanData(poseStack, buffers, sideScanLayout, displayRange);
             } else {
@@ -613,7 +617,7 @@ public final class SonarMonitorRenderer {
                         radius, 1, 1, 1, 1);
             }
             if (showLabels) renderTrackLabel(track, monitor, poseStack, buffers,
-                    map, x, z, screen, ECHO_SOUNDER_LABEL_DEPTH);
+                    map, x, z, screen, LABEL_DEPTH);
         }
     }
 
@@ -1470,7 +1474,7 @@ public final class SonarMonitorRenderer {
         float safeZ = Math.max(area.bottom() + inset + halfHeight,
                 Math.min(area.top() - inset - halfHeight, z));
         poseStack.pushPose();
-        poseStack.translate(safeX, ECHO_SOUNDER_LABEL_DEPTH, safeZ);
+        poseStack.translate(safeX, LABEL_DEPTH, safeZ);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
         poseStack.scale(scale, scale, scale);
         font.drawInBatch(text, -font.width(text) / 2f, -font.lineHeight / 2f,
