@@ -9,6 +9,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class EchoSounderDepthTest {
     @Test
+    void worldMapFitsTheTextureOpeningAndGuiKeepsTheSameProportions() {
+        SonarDisplayLayout.Area oneBlock = SonarDisplayLayout.area(new SonarMonitorDimensions(1, 1));
+        SonarDisplayLayout.Area compact = EchoSounderDepth.worldMapArea(oneBlock);
+        assertEquals(0.125f, compact.left(), 0.0001f);
+        assertEquals(0.875f, compact.right(), 0.0001f);
+        assertEquals(0.125f, compact.bottom(), 0.0001f);
+        assertEquals(0.875f, compact.top(), 0.0001f);
+
+        SonarDisplayLayout.Area twoByTwo = SonarDisplayLayout.area(new SonarMonitorDimensions(2, 2));
+        SonarDisplayLayout.Area guiOne = EchoSounderDepth.mapArea(oneBlock);
+        SonarDisplayLayout.Area guiTwo = EchoSounderDepth.mapArea(twoByTwo);
+        assertEquals(guiOne.width(), guiTwo.width() / 2f, 0.0001f);
+        assertEquals(guiOne.height(), guiTwo.height() / 2f, 0.0001f);
+        SonarDisplayLayout.Area worldTwo = EchoSounderDepth.worldMapArea(twoByTwo);
+        SonarDisplayLayout.Area opening = EchoSounderDepth.worldScreenArea(twoByTwo);
+        assertTrue(worldTwo.left() > opening.left());
+        assertTrue(worldTwo.right() < opening.right());
+        assertTrue(worldTwo.bottom() > opening.bottom());
+        assertTrue(worldTwo.top() < opening.top());
+    }
+
+    @Test
     void selectsTheMostVerticalReturnAndProjectsItsDepth() {
         SonarReturn angled = new SonarReturn(0, 20, 30, 0, 0.25f, 1, 0, 0);
         SonarReturn straight = new SonarReturn(1, 40, 0, 0, 0.5f, 1, 0, 0);
