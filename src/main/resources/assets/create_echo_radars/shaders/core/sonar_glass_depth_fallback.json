@@ -4,7 +4,9 @@
   "samplers": [
     { "name": "DepthSampler" },
     { "name": "CutoutDepthSampler" },
-    { "name": "SceneDepthSampler" }
+    { "name": "SceneDepthSampler" },
+    { "name": "IrisDepthSampler" },
+    { "name": "IrisPreHandDepthSampler" }
   ],
   "uniforms": [
     { "name": "ModelViewMat", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
@@ -13,6 +15,7 @@
     { "name": "CameraPosition", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
     { "name": "MinRenderDistance", "type": "float", "count": 1, "values": [ 8.0 ] },
     { "name": "GridStyle", "type": "int", "count": 1, "values": [ 1 ] },
+    { "name": "HandMaskEnabled", "type": "int", "count": 1, "values": [ 0 ] },
     { "name": "ScreenSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
     { "name": "CycleAge", "type": "float", "count": 1, "values": [ 0.0 ] },
     { "name": "Disconnect", "type": "float", "count": 1, "values": [ 1.0 ] },

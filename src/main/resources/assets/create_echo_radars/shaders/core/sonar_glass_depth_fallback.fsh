@@ -3,10 +3,13 @@
 uniform sampler2D DepthSampler;
 uniform sampler2D CutoutDepthSampler;
 uniform sampler2D SceneDepthSampler;
+uniform sampler2D IrisDepthSampler;
+uniform sampler2D IrisPreHandDepthSampler;
 uniform mat4 InverseViewProjection;
 uniform vec3 CameraPosition;
 uniform float MinRenderDistance;
 uniform int GridStyle;
+uniform int HandMaskEnabled;
 uniform vec2 ScreenSize;
 uniform float CycleAge;
 uniform float Disconnect;
@@ -244,6 +247,12 @@ vec2 gridPattern(vec2 worldUv) {
 
 void main() {
     vec2 uv = gl_FragCoord.xy / ScreenSize;
+    if (HandMaskEnabled != 0) {
+        float finalDepth = texture(IrisDepthSampler, uv).r;
+        float preHandDepth = texture(IrisPreHandDepthSampler, uv).r;
+        if (finalDepth < 0.75
+            && finalDepth + 0.0005 < preHandDepth) discard;
+    }
     float depth = texture(DepthSampler, uv).r;
     vec3 worldPosition;
     if (!selectSonarSurface(uv, depth, worldPosition)) discard;

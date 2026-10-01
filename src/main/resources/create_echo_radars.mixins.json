@@ -17,6 +17,7 @@
     "MonitorRendererMixin",
     "CopycatSonarGlassOcclusionMixin",
     "FusionConnectingTextureMixin",
+    "IrisSonarPostRenderMixin",
     "SodiumSonarFogOcclusionMixin",
     "SodiumSonarOpaqueDepthMixin"
   ],
