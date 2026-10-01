@@ -8,6 +8,8 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.renderer.ShaderInstance;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.phys.AABB;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RegisterShadersEvent;
 import org.joml.Matrix4f;
 import org.rassvet.create_echo_radars.CreateEchoRadars;
@@ -21,6 +23,7 @@ public final class DeepSeasShaderFogRenderer {
                     "deep_seas_shader_fog");
     private static ShaderInstance shader;
     private static boolean fogLogged;
+    private static boolean ownerBoundsLogged;
 
     private DeepSeasShaderFogRenderer() {}
 
@@ -33,7 +36,8 @@ public final class DeepSeasShaderFogRenderer {
         }
     }
 
-    static void render(Matrix4f inverseViewProjection, float opacity) {
+    static void render(Matrix4f inverseViewProjection, Vec3 cameraPosition,
+                       AABB ownerBounds, float opacity) {
         if (shader == null || !SonarGlassDepthCapture.isValid()
                 || !DeepSeasFogState.shouldRender()) return;
         IrisShaderCompat.HandDepthTextures handDepth =
@@ -44,13 +48,30 @@ public final class DeepSeasShaderFogRenderer {
                 SonarGlassDepthCapture.cutoutTextureId());
         shader.setSampler("SceneDepthSampler",
                 SonarGlassDepthCapture.sceneTextureId());
-        shader.setSampler("IrisDepthSampler", handDepth.finalDepth());
+        shader.setSampler("IrisPostHandDepthSampler", handDepth.postHandDepth());
         shader.setSampler("IrisPreHandDepthSampler", handDepth.preHandDepth());
         shader.getUniform("InverseViewProjection").set(inverseViewProjection);
         shader.getUniform("ScreenSize").set(
                 (float) SonarGlassDepthCapture.width(),
                 (float) SonarGlassDepthCapture.height());
         shader.getUniform("FogOpacity").set(opacity);
+        shader.getUniform("OwnerBoundsEnabled").set(ownerBounds == null ? 0 : 1);
+        if (ownerBounds != null) {
+            if (!ownerBoundsLogged) {
+                ownerBoundsLogged = true;
+                CreateEchoRadars.LOGGER.info(
+                        "DeepSeas shader fog is protecting the player's Sable bounds: {}",
+                        ownerBounds);
+            }
+            shader.getUniform("OwnerBoundsMin").set(
+                    (float) (ownerBounds.minX - cameraPosition.x),
+                    (float) (ownerBounds.minY - cameraPosition.y),
+                    (float) (ownerBounds.minZ - cameraPosition.z));
+            shader.getUniform("OwnerBoundsMax").set(
+                    (float) (ownerBounds.maxX - cameraPosition.x),
+                    (float) (ownerBounds.maxY - cameraPosition.y),
+                    (float) (ownerBounds.maxZ - cameraPosition.z));
+        }
 
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();

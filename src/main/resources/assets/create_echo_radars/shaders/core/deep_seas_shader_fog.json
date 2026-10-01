@@ -5,12 +5,15 @@
     { "name": "DepthSampler" },
     { "name": "WorldDepthSampler" },
     { "name": "SceneDepthSampler" },
-    { "name": "IrisDepthSampler" },
+    { "name": "IrisPostHandDepthSampler" },
     { "name": "IrisPreHandDepthSampler" }
   ],
   "uniforms": [
     { "name": "InverseViewProjection", "type": "matrix4x4", "count": 16, "values": [ 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0 ] },
     { "name": "ScreenSize", "type": "float", "count": 2, "values": [ 1.0, 1.0 ] },
-    { "name": "FogOpacity", "type": "float", "count": 1, "values": [ 1.0 ] }
+    { "name": "FogOpacity", "type": "float", "count": 1, "values": [ 1.0 ] },
+    { "name": "OwnerBoundsEnabled", "type": "int", "count": 1, "values": [ 0 ] },
+    { "name": "OwnerBoundsMin", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] },
+    { "name": "OwnerBoundsMax", "type": "float", "count": 3, "values": [ 0.0, 0.0, 0.0 ] }
   ]
 }

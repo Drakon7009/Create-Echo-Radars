@@ -21,6 +21,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -152,7 +153,9 @@ public final class SonarGlassOverlay {
         if (!IrisShaderCompat.isShaderPackInUse() || viewProjection == null) return;
         Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
         Matrix4f inverseViewProjection = new Matrix4f(viewProjection).invert();
-        DeepSeasShaderFogRenderer.render(inverseViewProjection, 1.0f);
+        AABB ownerBounds = DeepSeasFogState.ownerBounds();
+        DeepSeasShaderFogRenderer.render(
+                inverseViewProjection, cameraPosition, ownerBounds, 1.0f);
         boolean glassVisible = hasActiveDisplay()
                 && SonarGlassDepthCapture.isValid();
         if (!irisPostRenderLogged && glassVisible) {
@@ -164,7 +167,8 @@ public final class SonarGlassOverlay {
         if (glassVisible) {
             // The grid is in the water view too. A lighter second veil lets
             // its distant lines recede without hiding the sonar display.
-            DeepSeasShaderFogRenderer.render(inverseViewProjection, 0.35f);
+            DeepSeasShaderFogRenderer.render(
+                    inverseViewProjection, cameraPosition, ownerBounds, 0.35f);
         }
     }
 
