@@ -31,6 +31,13 @@ final class SonarGlassRenderBackend {
 
     static void renderDepth(List<SonarGlassDepthDraw> draws) {
         if (draws.isEmpty()) return;
+        if (IrisShaderCompat.isShaderPackInUse()) {
+            // Veil's bridge shader can be valid yet produce no fragments after
+            // Iris has completed its final composite. Use the core shader in
+            // that post-composite pass.
+            SonarGlassVanillaDepthRenderer.renderDepth(draws);
+            return;
+        }
         if (veilEnabled) {
             try {
                 if (veilDepthRender == null) {
