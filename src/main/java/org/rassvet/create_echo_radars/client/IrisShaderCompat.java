@@ -16,12 +16,12 @@ public final class IrisShaderCompat {
     private static Method pipelineManagerMethod;
     private static Method currentPipelineMethod;
     private static Field renderTargetsField;
-    private static Method finalDepthMethod;
+    private static Method postHandDepthMethod;
     private static Method preHandDepthMethod;
     private static Method textureIdMethod;
     private static boolean handDepthUnavailable;
 
-    public record HandDepthTextures(int finalDepth, int preHandDepth) {}
+    public record HandDepthTextures(int postHandDepth, int preHandDepth) {}
 
     private IrisShaderCompat() {}
 
@@ -44,7 +44,7 @@ public final class IrisShaderCompat {
         }
     }
 
-    /** Iris depthtex0 includes the hand; depthtex2 is copied before it. */
+    /** Iris depthtex1 includes the hand but excludes translucent glass; depthtex2 excludes both. */
     public static HandDepthTextures handDepthTextures() {
         if (!isShaderPackInUse() || handDepthUnavailable) return null;
         try {
@@ -60,7 +60,7 @@ public final class IrisShaderCompat {
                 renderTargetsField.setAccessible(true);
                 Class<?> targets = Class.forName(
                         "net.irisshaders.iris.targets.RenderTargets");
-                finalDepthMethod = targets.getMethod("getDepthTexture");
+                postHandDepthMethod = targets.getMethod("getDepthTextureNoTranslucents");
                 preHandDepthMethod = targets.getMethod("getDepthTextureNoHand");
                 Class<?> depthTexture = Class.forName(
                         "net.irisshaders.iris.targets.DepthTexture");
@@ -70,11 +70,12 @@ public final class IrisShaderCompat {
             Optional<?> pipeline = (Optional<?>) currentPipelineMethod.invoke(manager);
             if (pipeline.isEmpty()) return null;
             Object targets = renderTargetsField.get(pipeline.get());
-            int finalDepth = (int) finalDepthMethod.invoke(targets);
+            Object postHandDepth = postHandDepthMethod.invoke(targets);
             Object preHandDepth = preHandDepthMethod.invoke(targets);
+            int postHandId = (int) textureIdMethod.invoke(postHandDepth);
             int preHandId = (int) textureIdMethod.invoke(preHandDepth);
-            if (finalDepth <= 0 || preHandId <= 0) return null;
-            return new HandDepthTextures(finalDepth, preHandId);
+            if (postHandId <= 0 || preHandId <= 0) return null;
+            return new HandDepthTextures(postHandId, preHandId);
         } catch (ReflectiveOperationException | LinkageError exception) {
             handDepthUnavailable = true;
             CreateEchoRadars.LOGGER.warn(
