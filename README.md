@@ -1,4 +1,8 @@
+
 # Create: Echo Radars
+<p align="center">
+  <img src="docs/images/inventory_banner_borderless.gif" alt="Echo Radars animated sonar banner" width="960">
+</p>
 
 **Explore what lies beneath the surface.** Create: Echo Radars brings underwater sonar to Minecraft 1.21.1, connecting acoustic scans to Create: Radars networks, monitors, and sonar glass.
 
