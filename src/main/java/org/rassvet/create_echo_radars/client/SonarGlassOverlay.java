@@ -137,6 +137,7 @@ public final class SonarGlassOverlay {
             cameraPosition = camera.getPosition();
             framePartialTick =
                     event.getPartialTick().getGameTimeDeltaPartialTick(true);
+            IrisNativeWaterFog.prepare(viewProjection, modelViewMatrix, cameraPosition);
             renderPulses(event);
             return;
         }

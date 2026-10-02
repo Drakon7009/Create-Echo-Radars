@@ -58,5 +58,6 @@ void main() {
         distanceToSurface = surfaceDistance(uv, depth);
     }
     float amount = clamp((distanceToSurface - 2.0) / 38.0, 0.0, 1.0);
+    // Unsupported shader packs use DeepSeas' ordinary water fog colour.
     fragColor = vec4(0.02, 0.05, 0.2, amount * 0.97 * FogOpacity);
 }
