@@ -18,6 +18,8 @@
     "CopycatSonarGlassOcclusionMixin",
     "FusionConnectingTextureMixin",
     "IrisSonarPostRenderMixin",
+    "IrisWaterFogSourceMixin",
+    "IrisWaterFogProgramMixin",
     "SodiumSonarFogOcclusionMixin",
     "SodiumSonarOpaqueDepthMixin"
   ],

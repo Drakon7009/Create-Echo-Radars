@@ -16,7 +16,7 @@ import org.rassvet.create_echo_radars.CreateEchoRadars;
 
 import java.io.IOException;
 
-/** Reapplies DeepSeas' 2–40 block blue fog after Iris' final composite. */
+/** DeepSeas fog fallback for shader packs without an active native water adapter. */
 public final class DeepSeasShaderFogRenderer {
     private static final ResourceLocation SHADER =
             ResourceLocation.fromNamespaceAndPath(CreateEchoRadars.MOD_ID,
@@ -38,7 +38,7 @@ public final class DeepSeasShaderFogRenderer {
 
     static void render(Matrix4f inverseViewProjection, Vec3 cameraPosition,
                        AABB ownerBounds, float opacity) {
-        if (shader == null || !SonarGlassDepthCapture.isValid()
+        if (IrisNativeWaterFog.appliedThisFrame() || shader == null || !SonarGlassDepthCapture.isValid()
                 || !DeepSeasFogState.shouldRender()) return;
         IrisShaderCompat.HandDepthTextures handDepth =
                 IrisShaderCompat.handDepthTextures();
