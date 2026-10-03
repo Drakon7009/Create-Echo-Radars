@@ -12,7 +12,7 @@ public record SonarMonitorSnapshot(List<SonarFrame> frames, int range, int displ
                                    int horizontalSector, int verticalSector, int horizontalBeams,
                                    SonarType sonarType, float scanAngle, float scanAngularSpeed,
                                    long scanAngleTick,
-                                   boolean autoHeight,
+                                   boolean autoHeight, boolean mirrorDisplay,
                                    Vec3 origin, Vec3 forward, Vec3 right, Vec3 up) {
     public SonarMonitorSnapshot {
         frames = List.copyOf(frames);
@@ -27,18 +27,28 @@ public record SonarMonitorSnapshot(List<SonarFrame> frames, int range, int displ
         up = up.normalize();
     }
 
+    public SonarMonitorSnapshot(List<SonarFrame> frames, int range, int displayRange,
+                                int horizontalSector, int verticalSector, int horizontalBeams,
+                                SonarType sonarType, float scanAngle, float scanAngularSpeed,
+                                long scanAngleTick, boolean autoHeight,
+                                Vec3 origin, Vec3 forward, Vec3 right, Vec3 up) {
+        this(frames, range, displayRange, horizontalSector, verticalSector, horizontalBeams,
+                sonarType, scanAngle, scanAngularSpeed, scanAngleTick, autoHeight, false,
+                origin, forward, right, up);
+    }
+
     public SonarMonitorSnapshot(List<SonarFrame> frames, int range,
                                 int horizontalSector, Vec3 origin, Vec3 forward,
                                 Vec3 right, Vec3 up) {
         this(frames, range, range, horizontalSector, 20, inferHorizontalBeams(frames),
-                SonarType.FORWARD_LOOKING_F, 0, 0, 0, false,
+                SonarType.FORWARD_LOOKING_F, 0, 0, 0, false, false,
                 origin, forward, right, up);
     }
 
     public SonarMonitorSnapshot(List<SonarFrame> frames, int range,
                                 int horizontalSector, Vec3 origin, Vec3 forward) {
         this(frames, range, range, horizontalSector, 20, inferHorizontalBeams(frames),
-                SonarType.FORWARD_LOOKING_F, 0, 0, 0, false, origin, forward,
+                SonarType.FORWARD_LOOKING_F, 0, 0, 0, false, false, origin, forward,
                 SonarOrientation.flatFromForward(forward).right(),
                 SonarOrientation.flatFromForward(forward).up());
     }
@@ -55,6 +65,7 @@ public record SonarMonitorSnapshot(List<SonarFrame> frames, int range, int displ
         tag.putFloat("ScanAngularSpeed", scanAngularSpeed);
         tag.putLong("ScanAngleTick", scanAngleTick);
         tag.putBoolean("AutoHeight", autoHeight);
+        tag.putBoolean("MirrorDisplay", mirrorDisplay);
         putVec(tag, "Origin", origin);
         putVec(tag, "Forward", forward);
         putVec(tag, "Right", right);
@@ -104,7 +115,7 @@ public record SonarMonitorSnapshot(List<SonarFrame> frames, int range, int displ
         return new SonarMonitorSnapshot(frames, range, displayRange,
                 Math.max(1, tag.getInt("Sector")), Math.max(1, verticalSector),
                 Math.max(1, horizontalBeams), sonarType, tag.getFloat("ScanAngle"),
-                tag.getFloat("ScanAngularSpeed"), tag.getLong("ScanAngleTick"), autoHeight,
+                tag.getFloat("ScanAngularSpeed"), tag.getLong("ScanAngleTick"), autoHeight, tag.getBoolean("MirrorDisplay"),
                 getVec(tag, "Origin"), forward, right, up);
     }
 

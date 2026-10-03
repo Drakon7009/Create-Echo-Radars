@@ -69,7 +69,7 @@ public final class SonarScanManager {
                 ServerConfig.horizontalBeams(sonar.getSonarType()),
                 ServerConfig.verticalBeams(sonar.getSonarType()),
                 ServerConfig.additionalRays(), ServerConfig.refineOnlyUndetectedNeighbors(),
-                ServerConfig.hitRefinementBacktrackBlocks(), sonar.isAutoHeight());
+                ServerConfig.hitRefinementBacktrackBlocks(), sonar.isAutoHeight(), sonar.isMirrorDisplay());
         ensureJob(descriptor);
     }
 
@@ -165,7 +165,8 @@ public final class SonarScanManager {
                     ServerConfig.horizontalBeams(sonarBlock.sonarType()),
                     ServerConfig.verticalBeams(sonarBlock.sonarType()),
                     ServerConfig.additionalRays(), ServerConfig.refineOnlyUndetectedNeighbors(),
-                    ServerConfig.hitRefinementBacktrackBlocks(), settings.get().autoHeight));
+                    ServerConfig.hitRefinementBacktrackBlocks(), settings.get().autoHeight,
+                    settings.get().mirrorDisplay));
         }
     }
 
@@ -193,7 +194,8 @@ public final class SonarScanManager {
                             boolean autoHeight = !blockEntity.contains("AutoHeight")
                                     || blockEntity.getBoolean("AutoHeight");
                             return Optional.of(new OfflineSettings(range, sector, verticalSector, tiltAngle,
-                                    blockEntity.getFloat("MechanicalAngle"), autoHeight));
+                                    blockEntity.getFloat("MechanicalAngle"), autoHeight,
+                                    blockEntity.getBoolean("MirrorDisplay")));
                         }
                     }
                     return Optional.empty();
@@ -638,7 +640,7 @@ public final class SonarScanManager {
                 cachedSnapshot = new SonarMonitorSnapshot(visibleFrames(), descriptor.range, displayRange,
                         descriptor.sector, descriptor.verticalSector, descriptor.horizontalBeams,
                         descriptor.type, descriptor.mechanicalAngle, descriptor.mechanicalAngularSpeed,
-                        descriptor.mechanicalAngleTick, descriptor.autoHeight,
+                        descriptor.mechanicalAngleTick, descriptor.autoHeight, descriptor.mirrorDisplay,
                         descriptor.displayOrigin, descriptor.displayForward,
                         descriptor.displayRight, descriptor.displayUp);
             }
@@ -934,7 +936,7 @@ public final class SonarScanManager {
                               long mechanicalAngleTick, boolean running,
                               int horizontalBeams, int verticalBeams,
                               int additionalRays, boolean refineOnlyUndetectedNeighbors,
-                              int hitRefinementBacktrackBlocks, boolean autoHeight) {
+                              int hitRefinementBacktrackBlocks, boolean autoHeight, boolean mirrorDisplay) {
         boolean sameScanSettings(Descriptor other) {
             return pos.equals(other.pos) && type == other.type && range == other.range
                     && sector == other.sector && verticalSector == other.verticalSector
@@ -955,7 +957,7 @@ public final class SonarScanManager {
     }
 
     private record OfflineSettings(int range, int sector, int verticalSector, int tiltAngle,
-                                    float mechanicalAngle, boolean autoHeight) {}
+                                    float mechanicalAngle, boolean autoHeight, boolean mirrorDisplay) {}
 
     private record TraceRay(int rayIndex, double originX, double originY, double originZ,
                             double directionX, double directionY, double directionZ,
