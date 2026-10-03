@@ -2,10 +2,8 @@ package org.rassvet.create_echo_radars;
 
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.registries.Registries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraft.world.item.BlockItem;
-import net.minecraft.world.item.CreativeModeTab;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.SoundType;
@@ -42,8 +40,6 @@ public final class CreateEchoRadars {
             DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, MOD_ID);
     public static final DeferredRegister<MenuType<?>> MENUS =
             DeferredRegister.create(Registries.MENU, MOD_ID);
-    public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS =
-            DeferredRegister.create(Registries.CREATIVE_MODE_TAB, MOD_ID);
 
     public static final DeferredHolder<net.minecraft.world.level.block.Block, SonarBlock> SONAR =
             BLOCKS.register("sonar", () -> new SonarBlock(SonarType.FORWARD_LOOKING_F));
@@ -108,21 +104,6 @@ public final class CreateEchoRadars {
                     SonarSignalSummatorBlockEntity::new, SIGNAL_SUMMATOR.get()).build(null));
     public static final DeferredHolder<MenuType<?>, MenuType<SonarMenu>> SONAR_MENU =
             MENUS.register("sonar", () -> net.neoforged.neoforge.common.extensions.IMenuTypeExtension.create(SonarMenu::new));
-    public static final DeferredHolder<CreativeModeTab, CreativeModeTab> CREATIVE_TAB =
-            CREATIVE_TABS.register("main", () -> CreativeModeTab.builder()
-                    .title(Component.translatable("itemGroup.create_echo_radars"))
-                    .icon(() -> SONAR_ITEM.get().getDefaultInstance())
-                    .displayItems((parameters, output) -> {
-                        output.accept(SONAR_ITEM.get());
-                        output.accept(ECHO_SOUNDER_ITEM.get());
-                        output.accept(MECHANICAL_SCANNING_SONAR_ITEM.get());
-                        output.accept(SIDE_SCAN_SONAR_ITEM.get());
-                        output.accept(SIGNAL_SUMMATOR_ITEM.get());
-                        output.accept(COPPER_SONAR_GLASS_ITEM.get());
-                        output.accept(IRON_SONAR_GLASS_ITEM.get());
-                        output.accept(SONAR_DEBUG_TOOL.get());
-                    })
-                    .build());
 
     public CreateEchoRadars(IEventBus modBus, ModContainer container) {
         container.registerConfig(ModConfig.Type.CLIENT,
@@ -133,8 +114,8 @@ public final class CreateEchoRadars {
         ITEMS.register(modBus);
         BLOCK_ENTITIES.register(modBus);
         MENUS.register(modBus);
-        CREATIVE_TABS.register(modBus);
         ModNetworking.register(modBus);
+        modBus.addListener(org.rassvet.create_echo_radars.compat.RadarInventory::addItems);
         if (FMLEnvironment.dist == Dist.CLIENT) {
             ClientEvents.register(modBus, container);
         }

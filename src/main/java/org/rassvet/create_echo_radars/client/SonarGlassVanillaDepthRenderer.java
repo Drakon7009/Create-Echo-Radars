@@ -54,6 +54,14 @@ public final class SonarGlassVanillaDepthRenderer {
                 SonarGlassDepthCapture.cutoutTextureId());
         shader.setSampler("SceneDepthSampler",
                 SonarGlassDepthCapture.sceneTextureId());
+        IrisShaderCompat.HandDepthTextures handDepth =
+                IrisShaderCompat.handDepthTextures();
+        int fallbackDepth = SonarGlassDepthCapture.opaqueTextureId();
+        shader.setSampler("IrisPostHandDepthSampler",
+                handDepth == null ? fallbackDepth : handDepth.postHandDepth());
+        shader.setSampler("IrisPreHandDepthSampler",
+                handDepth == null ? fallbackDepth : handDepth.preHandDepth());
+        uniform("HandMaskEnabled").set(handDepth == null ? 0 : 1);
         RenderSystem.enableBlend();
         RenderSystem.defaultBlendFunc();
         RenderSystem.disableDepthTest();

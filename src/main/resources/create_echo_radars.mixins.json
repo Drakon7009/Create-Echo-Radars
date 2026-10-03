@@ -4,6 +4,7 @@
   "package": "org.rassvet.create_echo_radars.mixin",
   "compatibilityLevel": "JAVA_21",
   "mixins": [
+    "RadarCreativeTabMixin",
     "DeepSeasHullStrengthConfigMixin",
     "DataLinkBlockItemMixin",
     "GuidedFuzeTorpedoMixin",
@@ -13,10 +14,14 @@
     "RadarScanningBlockBehaviorMixin"
   ],
   "client": [
+    "RadarCreativeInventoryScreenMixin",
     "MonitorBlockClientMixin",
     "MonitorRendererMixin",
     "CopycatSonarGlassOcclusionMixin",
     "FusionConnectingTextureMixin",
+    "IrisSonarPostRenderMixin",
+    "IrisWaterFogSourceMixin",
+    "IrisWaterFogProgramMixin",
     "SodiumSonarFogOcclusionMixin",
     "SodiumSonarOpaqueDepthMixin"
   ],

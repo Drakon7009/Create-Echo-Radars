@@ -3,6 +3,7 @@ package org.rassvet.create_echo_radars.client;
 import com.mojang.blaze3d.pipeline.TextureTarget;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.Minecraft;
+import org.rassvet.create_echo_radars.CreateEchoRadars;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL30;
 
@@ -22,6 +23,7 @@ final class SonarGlassDepthCapture {
     private static boolean opaqueValid;
     private static boolean cutoutValid;
     private static boolean sceneValid;
+    private static boolean irisSourceLogged;
 
     private SonarGlassDepthCapture() {
     }
@@ -47,7 +49,7 @@ final class SonarGlassDepthCapture {
                 && capture(sceneTarget, source);
     }
 
-    /** Copies depth from Minecraft's current main world framebuffer. */
+    /** Copies depth from the active world framebuffer. */
     private static boolean capture(TextureTarget target, CaptureSource source) {
         RenderSystem.assertOnRenderThread();
         int previousTexture = GL11.glGetInteger(GL11.GL_TEXTURE_BINDING_2D);
@@ -76,6 +78,10 @@ final class SonarGlassDepthCapture {
                 && sceneTarget != null;
     }
 
+    static boolean hasOpaqueDepth() {
+        return opaqueValid && opaqueTarget != null;
+    }
+
     static void invalidate() {
         opaqueValid = false;
         cutoutValid = false;
@@ -83,7 +89,7 @@ final class SonarGlassDepthCapture {
     }
 
     static int opaqueTextureId() {
-        if (!isValid()) {
+        if (!hasOpaqueDepth()) {
             throw new IllegalStateException("Sonar glass depth capture is unavailable");
         }
         return opaqueTarget.getDepthTextureId();
@@ -152,8 +158,19 @@ final class SonarGlassDepthCapture {
                     GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
 
             var main = Minecraft.getInstance().getMainRenderTarget();
+            // Iris may bind a gbuffer framebuffer for terrain. Read the
+            // framebuffer bound at this stage when one is available.
+            boolean iris = IrisShaderCompat.isShaderPackInUse();
+            int framebuffer = iris && previousDraw != 0
+                    ? previousDraw : main.frameBufferId;
+            if (iris && !irisSourceLogged) {
+                irisSourceLogged = true;
+                CreateEchoRadars.LOGGER.info(
+                        "Iris sonar depth source framebuffer: {}, main framebuffer: {}",
+                        framebuffer, main.frameBufferId);
+            }
             return new CaptureSource(
-                    main.frameBufferId, previousRead, previousDraw,
+                    framebuffer, previousRead, previousDraw,
                     Math.max(1, main.width), Math.max(1, main.height),
                     viewport[0], viewport[1],
                     viewport[2], viewport[3]);
