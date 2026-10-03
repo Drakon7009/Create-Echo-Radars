@@ -19,6 +19,7 @@ public class SonarMenu extends AbstractContainerMenu {
     private final DataSlot tiltAngle = DataSlot.standalone();
     private final DataSlot sonarType = DataSlot.standalone();
     private final DataSlot autoHeight = DataSlot.standalone();
+    private final DataSlot mirrorDisplay = DataSlot.standalone();
 
     public SonarMenu(int containerId, Inventory inventory, RegistryFriendlyByteBuf buffer) {
         this(containerId, inventory, (SonarBlockEntity) inventory.player.level().getBlockEntity(buffer.readBlockPos()));
@@ -35,6 +36,7 @@ public class SonarMenu extends AbstractContainerMenu {
         addDataSlot(tiltAngle);
         addDataSlot(sonarType);
         addDataSlot(autoHeight);
+        addDataSlot(mirrorDisplay);
         if (sonar != null) {
             range.set(sonar.getConfiguredSonarRange());
             sector.set(sonar.getHorizontalSector());
@@ -42,6 +44,7 @@ public class SonarMenu extends AbstractContainerMenu {
             tiltAngle.set(sonar.getTiltAngle());
             sonarType.set(sonar.getSonarType().ordinal());
             autoHeight.set(sonar.isAutoHeight() ? 1 : 0);
+            mirrorDisplay.set(sonar.isMirrorDisplay() ? 1 : 0);
         }
     }
 
@@ -72,6 +75,10 @@ public class SonarMenu extends AbstractContainerMenu {
 
     public boolean isAutoHeight() {
         return autoHeight.get() != 0;
+    }
+
+    public boolean isMirrorDisplay() {
+        return mirrorDisplay.get() != 0;
     }
 
     @Override

@@ -43,6 +43,7 @@ public abstract class MonitorInputHandlerMixin {
                         widthDirection.getStepZ() * (dimensions.width() - 1) / 2.0);
         Vec3 local = adjustForFacing(hit.subtract(center), monitorFacing);
         double clickedX = local.x / (dimensions.width() * 0.5);
+        if (snapshot.mirrorDisplay()) clickedX = -clickedX;
         double clickedZ = local.z / (dimensions.height() * 0.5);
 
         RadarTrack best = null;

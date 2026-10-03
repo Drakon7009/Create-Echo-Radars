@@ -1,4 +1,5 @@
 {
+  "gui.create_echo_radars.mirror_display": "Mirror monitor data: %s",
   "block.create_echo_radars.sonar": "Forward-looking Sonar",
   "block.create_echo_radars.echo_sounder": "Echo Sounder",
   "monitor.create_echo_radars.echo_sounder.depth": "Depth: %s",

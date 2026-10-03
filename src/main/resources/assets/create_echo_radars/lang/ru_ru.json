@@ -1,4 +1,5 @@
 {
+  "gui.create_echo_radars.mirror_display": "Отзеркаливание данных монитора: %s",
   "block.create_echo_radars.sonar": "Сонар переднего обзора",
   "block.create_echo_radars.echo_sounder": "Эхолот",
   "monitor.create_echo_radars.echo_sounder.depth": "Глубина: %s",
