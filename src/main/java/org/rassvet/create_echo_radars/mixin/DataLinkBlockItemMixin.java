@@ -7,6 +7,7 @@ import com.happysg.radar.block.controller.networkcontroller.NetworkFiltererBlock
 import com.happysg.radar.compat.vs2.PhysicsHandler;
 import com.happysg.radar.config.RadarConfig;
 import com.happysg.radar.registry.ModBlocks;
+import net.createmod.catnip.config.ConfigBase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -91,7 +92,7 @@ public abstract class DataLinkBlockItemMixin {
         }
         BlockState clickedState = level.getBlockState(clickedPos);
         BlockPos placedPos = clickedPos.relative(ctx.getClickedFace(), clickedState.canBeReplaced() ? 0 : 1);
-        double range = RadarConfig.server().radarLinkRange.get();
+        double range = createEchoRadars$linkRange();
         if (!PhysicsHandler.getWorldPos(level, placedPos).getCenter().closerThan(
                 PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)
                 || !PhysicsHandler.getWorldPos(level, placedPos).getCenter().closerThan(
@@ -174,7 +175,7 @@ public abstract class DataLinkBlockItemMixin {
             return;
         }
 
-        double range = RadarConfig.server().radarLinkRange.get();
+        double range = createEchoRadars$linkRange();
         if (!PhysicsHandler.getWorldPos(level, sonar.getBlockPos()).getCenter().closerThan(
                 PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)) {
             error(ctx, "display_link.too_far");
@@ -298,7 +299,7 @@ public abstract class DataLinkBlockItemMixin {
             cir.setReturnValue(InteractionResult.FAIL);
             return;
         }
-        double range = RadarConfig.server().radarLinkRange.get();
+        double range = createEchoRadars$linkRange();
         if (!PhysicsHandler.getWorldPos(level, ctx.getClickedPos()).getCenter().closerThan(
                 PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)) {
             error(ctx, "display_link.too_far");
@@ -322,6 +323,17 @@ public abstract class DataLinkBlockItemMixin {
 
     private static void error(UseOnContext ctx, String key) {
         ctx.getPlayer().displayClientMessage(Component.translatable(key).withStyle(ChatFormatting.RED), true);
+    }
+
+    private static double createEchoRadars$linkRange() {
+        try {
+            var config = RadarConfig.server();
+            var range = (ConfigBase.ConfigInt) config.getClass().getField("radarLinkRange").get(config);
+            return range.get();
+        } catch (ReflectiveOperationException missingLegacyRange) {
+            // Radars 5.0-EA removed this setting and no longer limits Data Link distance.
+            return Double.POSITIVE_INFINITY;
+        }
     }
 
     @Redirect(
