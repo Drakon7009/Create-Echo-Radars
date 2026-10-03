@@ -172,8 +172,9 @@ public final class SonarMonitorScreen extends Screen {
                                     int mouseX, int mouseY) {
         double x = area.left() + (mouseX - displayLeft) / displayScale;
         double z = area.bottom() + (mouseY - displayTop) / displayScale;
+        double sourceX = snapshot.mirrorDisplay() ? area.left() + area.right() - x : x;
         SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(area);
-        if (x < map.left() || x > map.right() || z < map.bottom() || z > map.top()) return;
+        if (sourceX < map.left() || sourceX > map.right() || z < map.bottom() || z > map.top()) return;
 
         float depth = SonarMonitorRenderer.echoSounderDepthAt(monitor, snapshot, x, z);
         String value = Float.isNaN(depth) ? "--" : Math.round(depth * 10f) / 10f + "m";
@@ -246,6 +247,7 @@ public final class SonarMonitorScreen extends Screen {
             }
             double sourceX = plotArea.centerX() + point.x() * plotArea.width() * 0.5;
             double sourceZ = plotArea.centerZ() + point.z() * plotArea.height() * 0.5;
+            if (snapshot.mirrorDisplay()) sourceX = area.left() + area.right() - sourceX;
             double screenX = displayLeft + (sourceX - area.left()) * displayScale;
             double screenY = displayTop + (sourceZ - area.bottom()) * displayScale;
             double distance = Math.pow(screenX - mouseX, 2) + Math.pow(screenY - mouseY, 2);

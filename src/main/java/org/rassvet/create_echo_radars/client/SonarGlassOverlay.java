@@ -21,6 +21,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.Half;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.BooleanOp;
 import net.minecraft.world.phys.shapes.Shapes;
@@ -65,6 +66,7 @@ public final class SonarGlassOverlay {
     private static boolean sodiumWorldCutoutDepthCaptured;
     private static boolean sodiumOpaqueCaptureLogged;
     private static boolean sodiumWorldCutoutCaptureLogged;
+    private static boolean irisPostRenderLogged;
     private static net.minecraft.world.level.Level fallbackNotifiedLevel;
     private static String fallbackNotifiedReason;
 
@@ -104,7 +106,7 @@ public final class SonarGlassOverlay {
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_SOLID_BLOCKS) {
             if ((!SODIUM_LOADED || !sodiumOpaqueDepthCaptured)
                     && minecraft.level != null && minecraft.player != null
-                    && hasActiveDisplay()) {
+                    && (hasActiveDisplay() || DeepSeasFogState.shouldRender())) {
                 // This is the actual surface on which the grid is projected.
                 // The fallback also keeps the renderer alive if an unknown
                 // Sodium version moves the internal injection point.
@@ -115,7 +117,7 @@ public final class SonarGlassOverlay {
         }
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_CUTOUT_BLOCKS) {
             if (minecraft.level != null && minecraft.player != null
-                    && hasActiveDisplay()) {
+                    && (hasActiveDisplay() || DeepSeasFogState.shouldRender())) {
                 if (!SODIUM_LOADED || !sodiumWorldCutoutDepthCaptured) {
                     SonarGlassDepthCapture.captureWorldCutoutDepth();
                 }
@@ -135,12 +137,39 @@ public final class SonarGlassOverlay {
             cameraPosition = camera.getPosition();
             framePartialTick =
                     event.getPartialTick().getGameTimeDeltaPartialTick(true);
+            IrisNativeWaterFog.prepare(viewProjection, modelViewMatrix, cameraPosition);
             renderPulses(event);
             return;
         }
         if (event.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
-            minecraft.getMainRenderTarget().bindWrite(true);
-            renderDepthWorld(framePartialTick);
+            if (!IrisShaderCompat.isShaderPackInUse()) {
+                minecraft.getMainRenderTarget().bindWrite(true);
+                renderDepthWorld(framePartialTick);
+            }
+        }
+    }
+
+    /** Called after Iris has completed its final shaderpack composite. */
+    public static void onIrisLevelRendered() {
+        if (!IrisShaderCompat.isShaderPackInUse() || viewProjection == null) return;
+        Minecraft.getInstance().getMainRenderTarget().bindWrite(true);
+        Matrix4f inverseViewProjection = new Matrix4f(viewProjection).invert();
+        AABB ownerBounds = DeepSeasFogState.ownerBounds();
+        DeepSeasShaderFogRenderer.render(
+                inverseViewProjection, cameraPosition, ownerBounds, 1.0f);
+        boolean glassVisible = hasActiveDisplay()
+                && SonarGlassDepthCapture.isValid();
+        if (!irisPostRenderLogged && glassVisible) {
+            irisPostRenderLogged = true;
+            CreateEchoRadars.LOGGER.info(
+                    "Sonar glass is drawing after the Iris final composite");
+        }
+        renderDepthWorld(framePartialTick);
+        if (glassVisible) {
+            // The grid is in the water view too. A lighter second veil lets
+            // its distant lines recede without hiding the sonar display.
+            DeepSeasShaderFogRenderer.render(
+                    inverseViewProjection, cameraPosition, ownerBounds, 0.35f);
         }
     }
 
@@ -151,7 +180,8 @@ public final class SonarGlassOverlay {
     public static void captureSodiumOpaqueDepth() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!SODIUM_LOADED || minecraft.level == null
-                || minecraft.player == null || !hasActiveDisplay()) return;
+                || minecraft.player == null
+                || !(hasActiveDisplay() || DeepSeasFogState.shouldRender())) return;
         SonarGlassDepthCapture.captureOpaqueDepth();
         sodiumOpaqueDepthCaptured = true;
         if (!sodiumOpaqueCaptureLogged) {
@@ -169,7 +199,8 @@ public final class SonarGlassOverlay {
     public static void captureSodiumWorldCutoutDepth() {
         Minecraft minecraft = Minecraft.getInstance();
         if (!SODIUM_LOADED || minecraft.level == null
-                || minecraft.player == null || !hasActiveDisplay()) return;
+                || minecraft.player == null
+                || !(hasActiveDisplay() || DeepSeasFogState.shouldRender())) return;
         SonarGlassDepthCapture.captureWorldCutoutDepth();
         sodiumWorldCutoutDepthCaptured = true;
         if (!sodiumWorldCutoutCaptureLogged) {

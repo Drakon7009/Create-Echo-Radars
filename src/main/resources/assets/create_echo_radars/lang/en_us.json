@@ -1,4 +1,5 @@
 {
+  "gui.create_echo_radars.mirror_display": "Mirror monitor data: %s",
   "block.create_echo_radars.sonar": "Forward-looking Sonar",
   "block.create_echo_radars.echo_sounder": "Echo Sounder",
   "monitor.create_echo_radars.echo_sounder.depth": "Depth: %s",
@@ -26,7 +27,8 @@
   "message.create_echo_radars.signal_summator.already_installed": "That sonar is already installed in this summator",
   "message.create_echo_radars.signal_summator.antenna_installed": "Data transmitter installed in slot %s",
   "message.create_echo_radars.signal_summator.antenna_removed": "Data transmitter removed",
-  "itemGroup.create_echo_radars": "Create: Echo Radars",
+  "itemGroup.create_echo_radars": "Echo Radars",
+  "itemGroup.create_echo_radars.combined": "Create: Radars & Echo Radars",
   "gui.create_echo_radars.range": "Range: %s blocks",
   "gui.create_echo_radars.sector": "Horizontal sector: %s",
   "gui.create_echo_radars.horizontal_sector": "Horizontal angle: %s",

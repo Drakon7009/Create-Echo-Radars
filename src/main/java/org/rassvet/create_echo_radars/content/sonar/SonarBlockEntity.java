@@ -68,6 +68,7 @@ public class SonarBlockEntity extends KineticBlockEntity
     private int verticalSector;
     private int tiltAngle;
     private boolean autoHeight = true;
+    private boolean mirrorDisplay;
     private float mechanicalAngle;
     private float previousMechanicalAngle;
     private BlockPos lastKnownNetworkPos;
@@ -443,8 +444,13 @@ public class SonarBlockEntity extends KineticBlockEntity
         return autoHeight;
     }
 
+    public boolean isMirrorDisplay() {
+        return mirrorDisplay;
+    }
+
     public boolean applySettings(Player player, int newRange, int newHorizontalSector,
-                                 int newVerticalSector, int newTiltAngle, boolean newAutoHeight) {
+                                 int newVerticalSector, int newTiltAngle, boolean newAutoHeight,
+                                 boolean newMirrorDisplay) {
         SonarType type = getSonarType();
         if (player.distanceToSqr(Vec3.atCenterOf(worldPosition)) > 64
                 || newRange < MIN_RANGE || newRange > ServerConfig.maximumSonarRange()
@@ -463,13 +469,14 @@ public class SonarBlockEntity extends KineticBlockEntity
         verticalSector = newVerticalSector;
         tiltAngle = newTiltAngle;
         autoHeight = newAutoHeight;
+        mirrorDisplay = newMirrorDisplay;
         setChanged();
         sendData();
         return true;
     }
 
     public boolean applySettings(Player player, int newRange, int newSector) {
-        return applySettings(player, newRange, newSector, verticalSector, tiltAngle, autoHeight);
+        return applySettings(player, newRange, newSector, verticalSector, tiltAngle, autoHeight, mirrorDisplay);
     }
 
     @Override
@@ -587,6 +594,7 @@ public class SonarBlockEntity extends KineticBlockEntity
         tag.putInt("VerticalSector", verticalSector);
         tag.putInt("TiltAngle", tiltAngle);
         tag.putBoolean("AutoHeight", autoHeight);
+        tag.putBoolean("MirrorDisplay", mirrorDisplay);
         tag.putFloat("MechanicalAngle", mechanicalAngle);
         tag.putLong("LastKnownNetworkPos", lastKnownNetworkPos.asLong());
         if (dataLinkFiltererPos != null) {
@@ -609,6 +617,7 @@ public class SonarBlockEntity extends KineticBlockEntity
                 : type.defaultVerticalAngle(), MIN_ANGLE, type.maximumVerticalAngle());
         tiltAngle = clampTilt(type, tag.getInt("TiltAngle"));
         autoHeight = !tag.contains("AutoHeight") || tag.getBoolean("AutoHeight");
+        mirrorDisplay = tag.getBoolean("MirrorDisplay");
         mechanicalAngle = SonarRotation.wrap(tag.getFloat("MechanicalAngle"));
         previousMechanicalAngle = mechanicalAngle;
         if (tag.contains("LastKnownNetworkPos")) {

@@ -67,6 +67,8 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
     private int draftVerticalSector;
     private int draftTiltAngle;
     private boolean draftAutoHeight;
+    private boolean draftMirrorDisplay;
+    private IconToggleButton mirrorDisplayButton;
     private boolean draftAnglePreviewEnabled;
     private IconToggleButton autoHeightButton;
     private IconToggleButton anglePreviewButton;
@@ -91,6 +93,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
             draftVerticalSector = menu.getVerticalSector();
             draftTiltAngle = SonarBlockEntity.clampTilt(type, menu.getTiltAngle());
             draftAutoHeight = menu.isAutoHeight();
+            draftMirrorDisplay = menu.isMirrorDisplay();
             draftAnglePreviewEnabled = menu.getSonar() != null
                     && SonarDebugRenderer.isAnglePreviewEnabled(menu.getSonar());
             draftInitialized = true;
@@ -143,6 +146,12 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
                     }
                 }));
 
+        mirrorDisplayButton = addRenderableWidget(new IconToggleButton(leftPos + 44, footerY,
+                101, 120, () -> draftMirrorDisplay, mirrorDisplayMessage(), () -> {
+                    draftMirrorDisplay = !draftMirrorDisplay;
+                    mirrorDisplayButton.setMessage(mirrorDisplayMessage());
+                }));
+
         addRenderableWidget(new ApplyButton(leftPos + 192, footerY, 18, 19,
                 Component.translatable("gui.create_echo_radars.apply"), this::onClose));
     }
@@ -153,7 +162,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
             settingsSent = true;
             captureDraft();
             ModNetworking.sendSettings(menu.getSonar().getBlockPos(), draftRange,
-                    draftSector, draftVerticalSector, draftTiltAngle, draftAutoHeight);
+                    draftSector, draftVerticalSector, draftTiltAngle, draftAutoHeight, draftMirrorDisplay);
         }
         super.onClose();
     }
@@ -190,6 +199,13 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
                 currentHorizontalAngle(), currentVerticalAngle(),
                 SyncedServerConfig.maximumSonarRange(), SyncedServerConfig.angleRangeReduction());
         range.clampTo(maximumRange);
+    }
+
+    private Component mirrorDisplayMessage() {
+        return Component.translatable("gui.create_echo_radars.mirror_display",
+                Component.translatable(draftMirrorDisplay
+                        ? "config.create_echo_radars.value.on"
+                        : "config.create_echo_radars.value.off"));
     }
 
     private Component autoHeightMessage() {
@@ -400,6 +416,8 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
         } else if (anglePreviewButton != null && anglePreviewButton.isHovered()) {
             graphics.renderTooltip(font,
                     Component.translatable("gui.create_echo_radars.angle_preview"), mouseX, mouseY);
+        } else if (mirrorDisplayButton != null && mirrorDisplayButton.isHovered()) {
+            graphics.renderTooltip(font, mirrorDisplayMessage(), mouseX, mouseY);
         } else {
             renderTooltip(graphics, mouseX, mouseY);
         }
@@ -543,14 +561,21 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
 
     private static final class IconToggleButton extends AbstractButton {
         private final int iconU;
+        private final int selectedIconU;
         private final BooleanSupplier selected;
         private final Runnable onPress;
         private boolean pressed;
 
         private IconToggleButton(int x, int y, int iconU, BooleanSupplier selected,
                                  Component message, Runnable onPress) {
+            this(x, y, iconU, iconU + 57, selected, message, onPress);
+        }
+
+        private IconToggleButton(int x, int y, int iconU, int selectedIconU, BooleanSupplier selected,
+                                 Component message, Runnable onPress) {
             super(x, y, 18, 19, message);
             this.iconU = iconU;
+            this.selectedIconU = selectedIconU;
             this.selected = selected;
             this.onPress = onPress;
         }
@@ -578,7 +603,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
 
         @Override
         protected void renderWidget(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-            int sourceU = pressed || selected.getAsBoolean() ? iconU + 57 : iconU;
+            int sourceU = pressed || selected.getAsBoolean() ? selectedIconU : iconU;
             int sourceV = pressed ? 188
                     : selected.getAsBoolean() || isHoveredOrFocused() ? 207 : 188;
             graphics.blit(TEXTURE, getX(), getY(), sourceU, sourceV,

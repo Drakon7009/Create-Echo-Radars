@@ -24,7 +24,7 @@ public final class ModNetworking {
     }
 
     private static void registerPayloads(RegisterPayloadHandlersEvent event) {
-        var registrar = event.registrar("17");
+        var registrar = event.registrar("18");
         registrar.playToServer(UpdateSonarSettingsPayload.TYPE,
                         UpdateSonarSettingsPayload.STREAM_CODEC, UpdateSonarSettingsPayload::handle)
                 .playToServer(UpdateServerConfigPayload.TYPE,
@@ -37,9 +37,9 @@ public final class ModNetworking {
     }
 
     public static void sendSettings(BlockPos pos, int range, int horizontalSector,
-                                    int verticalSector, int tiltAngle, boolean autoHeight) {
+                                    int verticalSector, int tiltAngle, boolean autoHeight, boolean mirrorDisplay) {
         PacketDistributor.sendToServer(new UpdateSonarSettingsPayload(
-                pos, range, horizontalSector, verticalSector, tiltAngle, autoHeight));
+                pos, range, horizontalSector, verticalSector, tiltAngle, autoHeight, mirrorDisplay));
     }
 
     public static void sendServerConfig(int[] horizontalBeams, int[] verticalBeams,
@@ -98,7 +98,7 @@ public final class ModNetworking {
     }
 
     public record UpdateSonarSettingsPayload(BlockPos pos, int range, int horizontalSector,
-                                             int verticalSector, int tiltAngle, boolean autoHeight)
+                                             int verticalSector, int tiltAngle, boolean autoHeight, boolean mirrorDisplay)
             implements CustomPacketPayload {
         public static final Type<UpdateSonarSettingsPayload> TYPE = new Type<>(
                 ResourceLocation.fromNamespaceAndPath(CreateEchoRadars.MOD_ID, "update_sonar_settings"));
@@ -112,18 +112,20 @@ public final class ModNetworking {
             buffer.writeVarInt(verticalSector);
             buffer.writeVarInt(tiltAngle);
             buffer.writeBoolean(autoHeight);
+            buffer.writeBoolean(mirrorDisplay);
         }
 
         private static UpdateSonarSettingsPayload decode(RegistryFriendlyByteBuf buffer) {
             return new UpdateSonarSettingsPayload(buffer.readBlockPos(), buffer.readVarInt(),
-                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readBoolean());
+                    buffer.readVarInt(), buffer.readVarInt(), buffer.readVarInt(), buffer.readBoolean(),
+                    buffer.readBoolean());
         }
 
         private static void handle(UpdateSonarSettingsPayload payload, IPayloadContext context) {
             context.enqueueWork(() -> {
                 if (context.player().level().getBlockEntity(payload.pos) instanceof SonarBlockEntity sonar) {
                     sonar.applySettings(context.player(), payload.range, payload.horizontalSector,
-                            payload.verticalSector, payload.tiltAngle, payload.autoHeight);
+                            payload.verticalSector, payload.tiltAngle, payload.autoHeight, payload.mirrorDisplay);
                 }
             });
         }

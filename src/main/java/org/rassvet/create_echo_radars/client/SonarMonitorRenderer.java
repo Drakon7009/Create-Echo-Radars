@@ -103,7 +103,9 @@ public final class SonarMonitorRenderer {
                 != org.rassvet.create_echo_radars.content.sonar.SonarType.ECHO_SOUNDER_A) {
             return Float.NaN;
         }
-        SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(displayArea(monitor));
+        SonarDisplayLayout.Area display = displayArea(monitor);
+        if (snapshot.mirrorDisplay()) x = display.left() + display.right() - x;
+        SonarDisplayLayout.Area map = EchoSounderDepth.mapArea(display);
         if (x < map.left() || x > map.right() || z < map.bottom() || z > map.top()) {
             return Float.NaN;
         }
@@ -116,30 +118,40 @@ public final class SonarMonitorRenderer {
     private static void renderContents(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
                                        PoseStack poseStack, MultiBufferSource buffers, float partialTick,
                                        String hoveredTrackId, boolean overrideHover) {
-        SonarDisplayLayout.Area area = displayArea(monitor);
-        int displayRange = displayRange(snapshot);
-        SonarPalette palette = ClientConfig.palette();
+        SonarDisplayLayout.Area display = displayArea(monitor);
+        poseStack.pushPose();
+        try {
+            if (snapshot.mirrorDisplay()) {
+                poseStack.translate(display.left() + display.right(), 0, 0);
+                poseStack.scale(-1, 1, 1);
+            }
+            SonarDisplayLayout.Area area = displayArea(monitor);
+            int displayRange = displayRange(snapshot);
+            SonarPalette palette = ClientConfig.palette();
 
-        if (!overrideHover && snapshot.sonarType()
-                != org.rassvet.create_echo_radars.content.sonar.SonarType.ECHO_SOUNDER_A) {
-            area = EchoSounderDepth.worldScreenArea(area);
-        }
-        if (snapshot.sonarType() != org.rassvet.create_echo_radars.content.sonar.SonarType.FORWARD_LOOKING_F) {
-            renderSpecialized(monitor, snapshot, poseStack, buffers, palette, area, displayRange,
-                    partialTick, overrideHover);
-            return;
-        }
+            if (!overrideHover && snapshot.sonarType()
+                    != org.rassvet.create_echo_radars.content.sonar.SonarType.ECHO_SOUNDER_A) {
+                area = EchoSounderDepth.worldScreenArea(area);
+            }
+            if (snapshot.sonarType() != org.rassvet.create_echo_radars.content.sonar.SonarType.FORWARD_LOOKING_F) {
+                renderSpecialized(monitor, snapshot, poseStack, buffers, palette, area, displayRange,
+                        partialTick, overrideHover);
+                return;
+            }
 
-        RenderType quadLayer = overrideHover ? SonarRenderTypes.screenQuads()
-                : SonarRenderTypes.worldQuads();
-        renderBackground(poseStack, buffers, quadLayer, palette, area,
-                snapshot.horizontalSector());
-        renderEchoes(monitor, snapshot, poseStack, buffers, palette,
-                area, displayRange, partialTick, quadLayer);
-        renderGrid(snapshot, poseStack, buffers, area);
-        renderTracks(monitor, snapshot, poseStack, buffers, area, displayRange,
-                hoveredTrackId, overrideHover);
-        renderLabels(snapshot, poseStack, buffers, area, displayRange);
+            RenderType quadLayer = overrideHover ? SonarRenderTypes.screenQuads()
+                    : SonarRenderTypes.worldQuads();
+            renderBackground(poseStack, buffers, quadLayer, palette, area,
+                    snapshot.horizontalSector());
+            renderEchoes(monitor, snapshot, poseStack, buffers, palette,
+                    area, displayRange, partialTick, quadLayer);
+            renderGrid(snapshot, poseStack, buffers, area);
+            renderTracks(monitor, snapshot, poseStack, buffers, area, displayRange,
+                    hoveredTrackId, overrideHover);
+            renderLabels(snapshot, poseStack, buffers, area, displayRange);
+        } finally {
+            poseStack.popPose();
+        }
     }
 
     private static void setupTransform(PoseStack poseStack, Direction direction) {
@@ -465,11 +477,11 @@ public final class SonarMonitorRenderer {
         if (forceLabels || ((SonarMonitorExtension) monitor)
                 .createEchoRadars$getMonitorDimensions().min() >= 2) {
             if (sideScan) {
-                renderSideScanData(poseStack, buffers, sideScanLayout, displayRange);
+                renderSideScanData(poseStack, buffers, sideScanLayout, displayRange, snapshot.mirrorDisplay());
             } else {
                 drawLabel(displayRange + "m", area.right() - area.minSize() * 0.06f,
                         area.bottom() + area.minSize() * 0.03f,
-                        poseStack, buffers, area.minSize());
+                        poseStack, buffers, area.minSize(), snapshot.mirrorDisplay());
             }
         }
     }
@@ -552,28 +564,28 @@ public final class SonarMonitorRenderer {
         drawEchoSounderLabel(I18n.get("monitor.create_echo_radars.echo_sounder.depth",
                         Float.isNaN(depth) ? "--" : Math.round(depth) + "m"),
                 left + size * 0.5f, top + unit * 0.085f,
-                poseStack, buffers, labelSize, 2.3f, visible);
+                poseStack, buffers, labelSize, 2.3f, visible, snapshot.mirrorDisplay());
         drawEchoSounderLabel(I18n.get("monitor.create_echo_radars.echo_sounder.range", displayRange + "m"),
                 left + size * 0.5f, bottom - unit * 0.085f,
-                poseStack, buffers, labelSize, 2.0f, visible);
+                poseStack, buffers, labelSize, 2.0f, visible, snapshot.mirrorDisplay());
         for (int division = 0; division <= 2; division++) {
             int horizontalAngle = Math.round(snapshot.horizontalSector() * (division - 1) / 2f);
             int verticalAngle = Math.round(snapshot.verticalSector() * (division - 1) / 2f);
             String horizontalText = (horizontalAngle > 0 ? "+" : "") + horizontalAngle + "°";
             String verticalText = (verticalAngle > 0 ? "+" : "") + verticalAngle + "°";
             drawEchoSounderLabel(horizontalText, left + size * division / 2f, top + unit * 0.025f,
-                    poseStack, buffers, labelSize, 1.7f, visible);
+                    poseStack, buffers, labelSize, 1.7f, visible, snapshot.mirrorDisplay());
             drawEchoSounderLabel(horizontalText, left + size * division / 2f, bottom - unit * 0.025f,
-                    poseStack, buffers, labelSize, 1.7f, visible);
+                    poseStack, buffers, labelSize, 1.7f, visible, snapshot.mirrorDisplay());
             drawEchoSounderLabel(verticalText, left + unit * 0.055f,
                     bottom + size * (division + 0.5f) / 3f,
-                    poseStack, buffers, labelSize, 1.5f, visible);
+                    poseStack, buffers, labelSize, 1.5f, visible, snapshot.mirrorDisplay());
         }
         for (int division = 0; division <= 2; division++) {
             int metres = Math.round(displayRange * (2 - division) / 2f);
             drawEchoSounderLabel(metres + "m", barLeft + barWidth + unit * 0.033f,
                     bottom + size * division / 2f,
-                    poseStack, buffers, labelSize, 1.7f, visible);
+                    poseStack, buffers, labelSize, 1.7f, visible, snapshot.mirrorDisplay());
         }
         renderEchoSounderTracks(monitor, snapshot, poseStack, buffers,
                 map, surface, palette, displayRange, screen, true);
@@ -617,7 +629,7 @@ public final class SonarMonitorRenderer {
                         radius, 1, 1, 1, 1);
             }
             if (showLabels) renderTrackLabel(track, monitor, poseStack, buffers,
-                    map, x, z, screen, LABEL_DEPTH);
+                    map, x, z, screen, LABEL_DEPTH, snapshot.mirrorDisplay());
         }
     }
 
@@ -646,7 +658,7 @@ public final class SonarMonitorRenderer {
     }
 
     private static void renderSideScanData(PoseStack poseStack, MultiBufferSource buffers,
-                                           SideScanDataLayout layout, int displayRange) {
+                                           SideScanDataLayout layout, int displayRange, boolean mirrored) {
         SonarDisplayLayout.Area plot = layout.plotArea();
         float size = Math.max(1, plot.minSize());
         SideScanDataPosition position = layout.position();
@@ -657,8 +669,8 @@ public final class SonarMonitorRenderer {
             for (int division = -3; division <= 3; division++) {
                 float x = plot.centerX() + plot.width() * 0.47f * division / 3f;
                 int distance = Math.round(displayRange * Math.abs(division) / 3f);
-                drawSideScanLabel(distance + "m", x, bottomZ, poseStack, buffers, size);
-                drawSideScanLabel(distance + "m", x, topZ, poseStack, buffers, size);
+                drawSideScanLabel(distance + "m", x, bottomZ, poseStack, buffers, size, mirrored);
+                drawSideScanLabel(distance + "m", x, topZ, poseStack, buffers, size, mirrored);
             }
         } else {
             float leftX = sideScanLabelPosition(layout.outerArea().left(), plot.left());
@@ -666,8 +678,8 @@ public final class SonarMonitorRenderer {
             for (int division = -3; division <= 3; division++) {
                 float z = plot.centerZ() + plot.height() * 0.47f * division / 3f;
                 int distance = Math.round(displayRange * Math.abs(division) / 3f);
-                drawSideScanLabel(distance + "m", leftX, z, poseStack, buffers, size);
-                drawSideScanLabel(distance + "m", rightX, z, poseStack, buffers, size);
+                drawSideScanLabel(distance + "m", leftX, z, poseStack, buffers, size, mirrored);
+                drawSideScanLabel(distance + "m", rightX, z, poseStack, buffers, size, mirrored);
             }
         }
 
@@ -681,8 +693,8 @@ public final class SonarMonitorRenderer {
                 float z = position == SideScanDataPosition.BOTTOM
                         ? plot.bottom() + plot.height() * progress
                         : plot.top() - plot.height() * progress;
-                drawSideScanLabel(label, leftX, z, poseStack, buffers, size);
-                drawSideScanLabel(label, rightX, z, poseStack, buffers, size);
+                drawSideScanLabel(label, leftX, z, poseStack, buffers, size, mirrored);
+                drawSideScanLabel(label, rightX, z, poseStack, buffers, size, mirrored);
             } else {
                 float bottomZ = sideScanLabelPosition(layout.outerArea().bottom(), plot.bottom());
                 float topZ = sideScanLabelPosition(layout.outerArea().top(), plot.top());
@@ -690,8 +702,8 @@ public final class SonarMonitorRenderer {
                 float x = position == SideScanDataPosition.RIGHT
                         ? plot.right() - plot.width() * progress
                         : plot.left() + plot.width() * progress;
-                drawSideScanLabel(label, x, bottomZ, poseStack, buffers, size);
-                drawSideScanLabel(label, x, topZ, poseStack, buffers, size);
+                drawSideScanLabel(label, x, bottomZ, poseStack, buffers, size, mirrored);
+                drawSideScanLabel(label, x, topZ, poseStack, buffers, size, mirrored);
             }
         }
     }
@@ -838,7 +850,7 @@ public final class SonarMonitorRenderer {
                 renderSprite(MonitorSprite.TARGET_SELECTED, poseStack, buffers, x, z,
                         radius, 1, 1, 1, 1);
             }
-            renderTrackLabel(track, monitor, poseStack, buffers, area, x, z, screen);
+            renderTrackLabel(track, monitor, poseStack, buffers, area, x, z, screen, snapshot.mirrorDisplay());
         }
     }
 
@@ -956,7 +968,7 @@ public final class SonarMonitorRenderer {
             float x = area.centerX() + (float) Math.sin(distanceLabelAngle) * radius;
             float z = area.centerZ() + (float) Math.cos(distanceLabelAngle) * radius;
             int distance = Math.max(1, Math.round(displayRange * ring / 4f));
-            drawLabel(distance + "m", x, z, poseStack, buffers, size);
+            drawLabel(distance + "m", x, z, poseStack, buffers, size, snapshot.mirrorDisplay());
         }
 
         float angleRadius = Math.min(size * 0.465f,
@@ -965,7 +977,7 @@ public final class SonarMonitorRenderer {
             double radians = Math.toRadians(angle);
             float x = area.centerX() + (float) Math.sin(radians) * angleRadius;
             float z = area.centerZ() + (float) Math.cos(radians) * angleRadius;
-            drawLabel(angle + "\u00b0", x, z, poseStack, buffers, size);
+            drawLabel(angle + "\u00b0", x, z, poseStack, buffers, size, snapshot.mirrorDisplay());
         }
     }
 
@@ -1326,22 +1338,22 @@ public final class SonarMonitorRenderer {
                 renderSprite(MonitorSprite.TARGET_SELECTED, poseStack, buffers, x, z,
                         trackRadius, 1, 1, 1, 1);
             }
-            renderTrackLabel(track, monitor, poseStack, buffers, area, x, z, overrideHover);
+            renderTrackLabel(track, monitor, poseStack, buffers, area, x, z, overrideHover, snapshot.mirrorDisplay());
         }
     }
 
     private static void renderTrackLabel(RadarTrack track, MonitorBlockEntity monitor,
                                          PoseStack poseStack, MultiBufferSource buffers,
                                          SonarDisplayLayout.Area area, float x, float z,
-                                         boolean screen) {
+                                         boolean screen, boolean mirrored) {
         renderTrackLabel(track, monitor, poseStack, buffers, area, x, z,
-                screen, LABEL_DEPTH + 0.001f);
+                screen, LABEL_DEPTH + 0.001f, mirrored);
     }
 
     private static void renderTrackLabel(RadarTrack track, MonitorBlockEntity monitor,
                                          PoseStack poseStack, MultiBufferSource buffers,
                                          SonarDisplayLayout.Area area, float x, float z,
-                                         boolean screen, float depth) {
+                                         boolean screen, float depth, boolean mirrored) {
         String label = trackLabel(track, monitor);
         if (label == null || label.isBlank()) return;
         float configuredScale = screen ? RadarConfig.client().monitorTextScale.getF() : 0.5f;
@@ -1356,7 +1368,7 @@ public final class SonarMonitorRenderer {
         poseStack.pushPose();
         poseStack.translate(xPosition, depth, zPosition);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
-        poseStack.scale(scale, scale, scale);
+        poseStack.scale(mirrored ? -scale : scale, scale, scale);
         font.drawInBatch(label, -font.width(label) / 2f, 0, 0xffffffff, false,
                 poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, 0xF000F0);
         poseStack.popPose();
@@ -1397,7 +1409,7 @@ public final class SonarMonitorRenderer {
                     rangeLabelBearing, snapshot.horizontalSector()),
                     area);
             drawLabel(Integer.toString(Math.max(1, displayRange * ring / 4)),
-                    (float) point.x, (float) point.z, poseStack, buffers, size);
+                    (float) point.x, (float) point.z, poseStack, buffers, size, snapshot.mirrorDisplay());
         }
         Vec3 apex = displayPoint(SonarDisplayProjection.project(0, 0,
                 snapshot.horizontalSector()), area);
@@ -1409,7 +1421,7 @@ public final class SonarMonitorRenderer {
             String text = (angle > 0 ? "+" : "") + angle + "°";
             Vec3 labelPoint = offsetLabelFromLine(text, point, apex, area, size);
             drawLabel(text, (float) labelPoint.x, (float) labelPoint.z,
-                    poseStack, buffers, size);
+                    poseStack, buffers, size, snapshot.mirrorDisplay());
         }
     }
 
@@ -1452,18 +1464,18 @@ public final class SonarMonitorRenderer {
     }
 
     private static void drawLabel(String text, float x, float z, PoseStack poseStack,
-                                  MultiBufferSource buffers, float size) {
-        drawLabel(text, x, z, poseStack, buffers, size, LABEL_SCALE);
+                                  MultiBufferSource buffers, float size, boolean mirrored) {
+        drawLabel(text, x, z, poseStack, buffers, size, LABEL_SCALE, mirrored);
     }
 
     private static void drawSideScanLabel(String text, float x, float z, PoseStack poseStack,
-                                          MultiBufferSource buffers, float size) {
-        drawLabel(text, x, z, poseStack, buffers, size, SIDE_SCAN_LABEL_SCALE);
+                                          MultiBufferSource buffers, float size, boolean mirrored) {
+        drawLabel(text, x, z, poseStack, buffers, size, SIDE_SCAN_LABEL_SCALE, mirrored);
     }
 
     private static void drawEchoSounderLabel(String text, float x, float z, PoseStack poseStack,
                                              MultiBufferSource buffers, float size,
-                                             float scaleMultiplier, SonarDisplayLayout.Area area) {
+                                             float scaleMultiplier, SonarDisplayLayout.Area area, boolean mirrored) {
         Font font = Minecraft.getInstance().font;
         float scale = 0.0022f * (size / 2f) * scaleMultiplier;
         float inset = area.minSize() * 0.01f;
@@ -1476,7 +1488,7 @@ public final class SonarMonitorRenderer {
         poseStack.pushPose();
         poseStack.translate(safeX, LABEL_DEPTH, safeZ);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
-        poseStack.scale(scale, scale, scale);
+        poseStack.scale(mirrored ? -scale : scale, scale, scale);
         font.drawInBatch(text, -font.width(text) / 2f, -font.lineHeight / 2f,
                 0xdde8e8e8, false, poseStack.last().pose(), buffers,
                 Font.DisplayMode.NORMAL, 0, 0xF000F0);
@@ -1484,13 +1496,13 @@ public final class SonarMonitorRenderer {
     }
 
     private static void drawLabel(String text, float x, float z, PoseStack poseStack,
-                                  MultiBufferSource buffers, float size, float scaleMultiplier) {
+                                  MultiBufferSource buffers, float size, float scaleMultiplier, boolean mirrored) {
         Font font = Minecraft.getInstance().font;
         poseStack.pushPose();
         poseStack.translate(x, LABEL_DEPTH, z);
         poseStack.mulPose(Axis.XP.rotationDegrees(90));
         float scale = labelScale(size, scaleMultiplier);
-        poseStack.scale(scale, scale, scale);
+        poseStack.scale(mirrored ? -scale : scale, scale, scale);
         font.drawInBatch(text, -font.width(text) / 2f, -font.lineHeight / 2f,
                 0xdde8e8e8, false,
                 poseStack.last().pose(), buffers, Font.DisplayMode.NORMAL, 0, 0xF000F0);
