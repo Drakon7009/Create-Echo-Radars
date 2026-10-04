@@ -5,7 +5,6 @@ import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.loading.FMLEnvironment;
 import net.neoforged.fml.ModContainer;
-import net.neoforged.fml.ModList;
 import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
@@ -22,7 +21,7 @@ import org.rassvet.create_echo_radars.client.DeepSeasShaderFogRenderer;
 import org.rassvet.create_echo_radars.client.SonarSignalSummatorRenderer;
 import org.rassvet.create_echo_radars.client.SonarSignalSummatorOutline;
 import org.rassvet.create_echo_radars.client.SonarMonitorRenderer;
-import org.rassvet.create_echo_radars.compat.fusion.SonarSlopeFrameConnectionPredicate;
+import org.rassvet.create_echo_radars.client.SonarGlassConnectedTextures;
 import org.rassvet.create_echo_radars.ponder.EchoRadarsPonderPlugin;
 import org.rassvet.create_echo_radars.performance.PerformanceClientTelemetry;
 import org.rassvet.create_echo_radars.performance.PerformanceTestBuild;
@@ -32,9 +31,7 @@ public final class ClientEvents {
 
     public static void register(IEventBus modBus, ModContainer container) {
         if (FMLEnvironment.dist == Dist.CLIENT) {
-            if (ModList.get().isLoaded("fusion")) {
-                SonarSlopeFrameConnectionPredicate.register();
-            }
+            SonarGlassConnectedTextures.register(modBus);
             container.registerExtensionPoint(IConfigScreenFactory.class,
                     (IConfigScreenFactory) (ignored, parent) ->
                             org.rassvet.create_echo_radars.client.SonarConfigScreen.create(parent));

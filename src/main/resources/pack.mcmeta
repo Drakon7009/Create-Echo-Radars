@@ -2,8 +2,5 @@
   "pack": {
     "pack_format": 34,
     "description": "Create: Echo Radars resources"
-  },
-  "fusion": {
-    "overrides_folder": "fusion-overrides"
   }
 }

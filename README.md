@@ -21,6 +21,8 @@ The mod brings together three parts:
 
 Client settings control the monitor palette, gain, speckle, and sonar glass display. Server settings control scanning and performance limits.
 
+Sonar glass frames use Create's built-in connected textures; Fusion is not required.
+
 ## Dependencies
 
 - Minecraft **1.21.1** with [NeoForge](https://neoforged.net/)
@@ -33,7 +35,6 @@ Client settings control the monitor palette, gain, speckle, and sonar glass disp
 - [Sable](https://www.curseforge.com/minecraft/mc-mods/sable) 1.2.1+ — scan moving contraptions and keep links connected when they move.
 - [CBC Military Supplement](https://www.curseforge.com/minecraft/mc-mods/cbcms) 2.1.4–2.1.x — guide torpedoes equipped with a Create: Radars Guided Fuze.
 - [Veil](https://www.curseforge.com/minecraft/mc-mods/veil-lib) 4.0.0+ — use the alternative sonar glass renderer. A compatible renderer is available without Veil.
-- [Fusion](https://www.curseforge.com/minecraft/mc-mods/fusion-connected-textures) 1.2.12+ — connected textures for sonar glass frames.
 - [Copycats](https://www.curseforge.com/minecraft/mc-mods/copycats) — use sonar glass as a material for compatible Copycats shapes.
 
 ## Credits

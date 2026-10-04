@@ -108,13 +108,6 @@ ordering = "AFTER"
 side = "CLIENT"
 
 [[dependencies."${mod_id}"]]
-modId = "fusion"
-type = "optional"
-versionRange = "[1.2.12,)"
-ordering = "AFTER"
-side = "CLIENT"
-
-[[dependencies."${mod_id}"]]
 modId = "yet_another_config_lib_v3"
 type = "required"
 versionRange = "[3.8.2,)"
