@@ -45,7 +45,7 @@ public final class ClientConfig {
                 .comment("Render one-block-wide sonar pixels and merge overlapping returns.")
                 .define("monitor.blockSizedPixels", true);
         OLD_PIXEL_LIFETIME_TICKS = builder
-                .comment("Non-mechanical sonar pixel lifetime in ticks. -1 clears on a new scan; 0 replaces pixels at the sweep front.")
+                .comment("Non-mechanical sonar fade time in ticks. Forward sonar retains a 30% afterimage ahead of the next sweep and clears old pixels behind it. For scrolling history, -1 clears on a new scan and 0 replaces at the sweep front.")
                 .defineInRange("monitor.oldPixelLifetimeTicks", 60, -1, 200);
         MECHANICAL_PIXEL_LIFETIME_TICKS = builder
                 .comment("Rotating mechanical sonar pixel lifetime in ticks. 0 automatically targets 30% brightness at the next sweep.")

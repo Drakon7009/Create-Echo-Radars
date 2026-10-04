@@ -543,6 +543,51 @@ class SonarMathTest {
     }
 
     @Test
+    void forwardSweepErasesOldPixelsBehindItAndKeepsTheFadedPixelsAhead() {
+        float faded = SonarDisplayLayout.forwardFrameAlpha(20, 100, false);
+        assertEquals(0, SonarDisplayLayout.forwardPixelAlpha(faded, 0.25f, 0.5f, true));
+        assertEquals(faded, SonarDisplayLayout.forwardPixelAlpha(faded, 0.75f, 0.5f, true));
+        assertEquals(faded, SonarDisplayLayout.forwardPixelAlpha(faded, 0.25f, 0.5f, false));
+        assertEquals(0, SonarDisplayLayout.forwardPixelAlpha(faded, 1, 1, true));
+    }
+
+    @Test
+    void forwardSweepClearsEmptyCellsWithoutWaitingForANewEcho() {
+        float[] oldDistances = {0.1f, 0.3f, 0.6f, 0.9f};
+        // The new scan has no returns. Its progress alone must still clear history.
+        int visible = 0;
+        for (float distance : oldDistances) {
+            if (SonarDisplayLayout.forwardPixelAlpha(0.3f, distance, 0.7f, true) > 0) visible++;
+        }
+        assertEquals(1, visible);
+        for (float distance : oldDistances) {
+            assertEquals(0, SonarDisplayLayout.forwardPixelAlpha(0.3f, distance, 1, true));
+        }
+    }
+
+    @Test
+    void forwardScanPixelsDimSmoothlyWithoutDisappearingBeforeFullRefresh() {
+        assertEquals(1, SonarDisplayLayout.forwardFrameAlpha(60, 0, false), 1.0e-6);
+        assertEquals(0.75f, SonarDisplayLayout.forwardFrameAlpha(60, 15, false), 1.0e-6);
+        assertEquals(0.5f, SonarDisplayLayout.forwardFrameAlpha(60, 30, false), 1.0e-6);
+        assertEquals(0.3f, SonarDisplayLayout.forwardFrameAlpha(60, 600, false), 1.0e-6);
+        // Fractional ticks avoid stepping the brightness once per game tick.
+        assertTrue(SonarDisplayLayout.forwardFrameAlpha(60, 15.5, false)
+                < SonarDisplayLayout.forwardFrameAlpha(60, 15, false));
+        assertEquals(0, SonarDisplayLayout.forwardFrameAlpha(60, 600, true), 1.0e-6);
+    }
+
+    @Test
+    void forwardScanLifetimeCannotEraseTheFrameWhileReplacementIsIncomplete() {
+        for (int lifetime : new int[]{-1, 0, 1, 60, 200}) {
+            for (int age = 0; age <= 400; age++) {
+                assertTrue(SonarDisplayLayout.forwardFrameAlpha(lifetime, age, false) >= 0.3f);
+            }
+            assertEquals(0, SonarDisplayLayout.forwardFrameAlpha(lifetime, 400, true));
+        }
+    }
+
+    @Test
     void oldPixelLifetimeMinusOneClearsOnlyWhenNewScanStarts() {
         assertEquals(1, SonarDisplayLayout.oldFrameAlpha(-1, 100, false, 0, true), 1.0e-6);
         assertEquals(0, SonarDisplayLayout.oldFrameAlpha(-1, 0, true, 0, true), 1.0e-6);
@@ -580,6 +625,12 @@ class SonarMathTest {
         assertEquals(1f / 128, SonarDisplayLayout.revealProgressPerTick(1, 128), 1.0e-6);
         assertEquals(10f / 128, SonarDisplayLayout.revealProgressPerTick(10, 128), 1.0e-6);
         assertEquals(16f / 128, SonarDisplayLayout.revealProgressPerTick(16, 128), 1.0e-6);
+    }
+
+    @Test
+    void revealFrontDoesNotMoveBackWhenRefinementAddsShorterRays() {
+        assertEquals(0.75f, SonarDisplayLayout.advanceRevealProgress(
+                0.75f, 0.25f, 1, 0.05f), 1.0e-6);
     }
 
     @Test
