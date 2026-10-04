@@ -138,9 +138,12 @@ public final class SyncedServerConfig {
                 horizontalBeams[i] = ServerConfig.defaultHorizontalBeams(type);
                 verticalBeams[i] = ServerConfig.defaultVerticalBeams(type);
             }
-            return new Snapshot(horizontalBeams, verticalBeams, 4, false, 5, 10, 20, 20, false,
-                    2, ServerConfig.defaultTraceWorkerThreads(),
-                    ServerConfig.DEFAULT_MAXIMUM_SONAR_RANGE, true, false, false);
+            var preset = ServerConfig.DEFAULT_PRESET;
+            return new Snapshot(horizontalBeams, verticalBeams, preset.additionalRays(),
+                    preset.refineOnlyUndetectedNeighbors(), preset.hitRefinementBacktrackBlocks(),
+                    preset.blocksPerTick(), preset.pingPauseTicks(), preset.pingPauseTicks(), false,
+                    preset.maxConcurrentChunkReads(), preset.traceWorkerThreads(),
+                    ServerConfig.DEFAULT_MAXIMUM_SONAR_RANGE, true, preset.entityOcclusionCheck(), false);
         }
     }
 }

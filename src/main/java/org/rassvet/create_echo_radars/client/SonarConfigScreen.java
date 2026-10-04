@@ -362,6 +362,7 @@ public final class SonarConfigScreen {
         private final Option<Boolean> entityOcclusionCheck;
 
         private OperatorOptions(Values values) {
+            SonarConfigPreset defaults = ServerConfig.DEFAULT_PRESET;
             for (SonarType type : SonarType.values()) {
                 horizontalBeams.put(type, intOption("config.create_echo_radars.server.horizontal_beams",
                         ServerConfig.defaultHorizontalBeams(type),
@@ -379,7 +380,7 @@ public final class SonarConfigScreen {
             additionalRays = Option.<AdditionalRayCount>createBuilder()
                     .name(Component.translatable("config.create_echo_radars.server.additional_rays"))
                     .description(description("config.create_echo_radars.server.additional_rays.description"))
-                    .binding(AdditionalRayCount.FOUR,
+                    .binding(AdditionalRayCount.fromValue(defaults.additionalRays()),
                             () -> AdditionalRayCount.fromValue(values.additionalRays),
                             value -> values.additionalRays = value.value())
                     .controller(option -> EnumControllerBuilder.create(option)
@@ -387,26 +388,26 @@ public final class SonarConfigScreen {
                             .valueFormatter(value -> Component.literal(Integer.toString(value.value()))))
                     .build();
             refineOnlyUndetectedNeighbors = booleanOption(
-                    "config.create_echo_radars.server.refine_only_undetected_neighbors", false,
+                    "config.create_echo_radars.server.refine_only_undetected_neighbors", defaults.refineOnlyUndetectedNeighbors(),
                     () -> values.refineOnlyUndetectedNeighbors,
                     value -> values.refineOnlyUndetectedNeighbors = value);
             hitRefinementBacktrackBlocks = intOption(
-                    "config.create_echo_radars.server.hit_refinement_backtrack", 5,
+                    "config.create_echo_radars.server.hit_refinement_backtrack", defaults.hitRefinementBacktrackBlocks(),
                     () -> values.hitRefinementBacktrackBlocks,
                     value -> values.hitRefinementBacktrackBlocks = value, 0, 16, 1);
-            blocksPerTick = intOption("config.create_echo_radars.server.blocks_per_tick", 10,
+            blocksPerTick = intOption("config.create_echo_radars.server.blocks_per_tick", defaults.blocksPerTick(),
                     () -> values.blocksPerTick, value -> values.blocksPerTick = value, 1, 16, 1);
-            pingPauseTicks = intOption("config.create_echo_radars.server.ping_pause_ticks", 20,
+            pingPauseTicks = intOption("config.create_echo_radars.server.ping_pause_ticks", defaults.pingPauseTicks(),
                     () -> values.pingPauseTicks, value -> values.pingPauseTicks = value, 0, 200, 1);
             sideScanPingPauseTicks = intOption(
-                    "config.create_echo_radars.server.side_scan_ping_pause_ticks", 20,
+                    "config.create_echo_radars.server.side_scan_ping_pause_ticks", defaults.pingPauseTicks(),
                     () -> values.sideScanPingPauseTicks,
                     value -> values.sideScanPingPauseTicks = value, 0, 200, 1);
             sideScanMovementOnly = booleanOption(
                     "config.create_echo_radars.server.side_scan_movement_only", false,
                     () -> values.sideScanMovementOnly,
                     value -> values.sideScanMovementOnly = value);
-            maxConcurrentChunkReads = intOption("config.create_echo_radars.server.max_chunk_reads", 2,
+            maxConcurrentChunkReads = intOption("config.create_echo_radars.server.max_chunk_reads", defaults.maxConcurrentChunkReads(),
                     () -> values.maxConcurrentChunkReads,
                     value -> values.maxConcurrentChunkReads = value, 1, 8, 1);
             traceWorkerThreads = intOption("config.create_echo_radars.server.trace_workers",
@@ -419,7 +420,7 @@ public final class SonarConfigScreen {
                     ServerConfig.MAXIMUM_SONAR_RANGE_LIMIT, 1);
             angleRangeReduction = booleanOption("config.create_echo_radars.server.angle_range_reduction", true,
                     () -> values.angleRangeReduction, value -> values.angleRangeReduction = value);
-            entityOcclusionCheck = booleanOption("config.create_echo_radars.server.entity_occlusion", false,
+            entityOcclusionCheck = booleanOption("config.create_echo_radars.server.entity_occlusion", defaults.entityOcclusionCheck(),
                     () -> values.entityOcclusionCheck, value -> values.entityOcclusionCheck = value);
         }
 
