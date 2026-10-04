@@ -1,9 +1,0 @@
-{
-  "loader": "fusion:model",
-  "type": "connecting",
-  "render_type": "minecraft:translucent",
-  "parent": "minecraft:block/cube_all",
-  "textures": {
-    "all": "create_echo_radars:block/iron_connecting_sonar_glass"
-  }
-}

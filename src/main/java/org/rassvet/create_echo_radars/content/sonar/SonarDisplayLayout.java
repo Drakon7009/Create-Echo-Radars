@@ -379,6 +379,22 @@ public final class SonarDisplayLayout {
         return gap + 1.0e-4f < requiredGap;
     }
 
+    /** Ahead of the next sweep, regular forward scans retain a dim afterimage. */
+    public static float forwardFrameAlpha(int lifetimeTicks, double ageTicks,
+                                          boolean newerFrameFullyRevealed) {
+        float lifetimeAlpha = clamp01(1 - (float) Math.max(0, ageTicks)
+                / Math.max(1, lifetimeTicks));
+        return newerFrameFullyRevealed ? lifetimeAlpha : Math.max(0.3f, lifetimeAlpha);
+    }
+
+    public static float forwardPixelAlpha(float frameAlpha, float distance,
+                                          float replacementProgress, boolean replacementActive) {
+        // A scanned empty cell must erase the old echo too: replacement does not
+        // depend on a new return being present at this position.
+        if (replacementActive && (replacementProgress >= 1 || distance < replacementProgress)) return 0;
+        return frameAlpha;
+    }
+
     public static float oldFrameAlpha(int lifetimeTicks, long ageTicks, boolean newScanActive,
                                       float newSweepAlpha, boolean latestCompletedFrame) {
         if (lifetimeTicks <= 0 && !latestCompletedFrame) return 0;
@@ -398,7 +414,9 @@ public final class SonarDisplayLayout {
 
     public static float advanceRevealProgress(float progress, float cap,
                                               double elapsedTicks, float speed) {
-        if (progress > cap) return cap;
+        // Adaptive refinement can introduce new rays behind the displayed front.
+        // Wait for them to catch up without erasing already displayed pixels.
+        if (progress > cap) return progress;
         double elapsed = Math.max(0, elapsedTicks);
         double advance = elapsed * Math.max(0, speed);
         return Math.min(cap, progress + (float) advance);

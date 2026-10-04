@@ -1,8 +1,8 @@
-package org.rassvet.create_echo_radars.compat.fusion;
+package org.rassvet.create_echo_radars.compat.ct;
 
 /**
  * Shape-only rules for the two triangular Copycats slopes. Keeping these
- * rules separate from Fusion makes every orientation straightforward to test.
+ * rules separate from the renderer makes every orientation straightforward to test.
  */
 public final class SlopeFrameConnectivity {
     private SlopeFrameConnectivity() {}

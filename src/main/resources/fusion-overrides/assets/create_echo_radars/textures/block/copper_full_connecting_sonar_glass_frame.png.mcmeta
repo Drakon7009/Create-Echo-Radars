@@ -1,9 +1,0 @@
-{
-  "fusion": {
-    "type": "connecting",
-    "layout": "full",
-    "connections": {
-      "type": "create_echo_radars:sonar_slope_frame"
-    }
-  }
-}

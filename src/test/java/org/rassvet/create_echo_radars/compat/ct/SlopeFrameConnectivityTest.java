@@ -1,4 +1,4 @@
-package org.rassvet.create_echo_radars.compat.fusion;
+package org.rassvet.create_echo_radars.compat.ct;
 
 import org.junit.jupiter.api.Test;
 

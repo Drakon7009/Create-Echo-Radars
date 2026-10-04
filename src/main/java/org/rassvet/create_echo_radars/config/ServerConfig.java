@@ -1,6 +1,7 @@
 package org.rassvet.create_echo_radars.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
+import org.rassvet.create_echo_radars.client.SonarConfigPreset;
 import org.rassvet.create_echo_radars.content.sonar.SonarType;
 import org.rassvet.create_echo_radars.content.sonar.SideScanGeometry;
 
@@ -8,6 +9,8 @@ import java.util.EnumMap;
 import java.util.Map;
 
 public final class ServerConfig {
+    public static final SonarConfigPreset DEFAULT_PRESET = SonarConfigPreset.BALANCED;
+    // Preserve the legacy defaults so old configs are not mistaken for custom global settings.
     public static final int DEFAULT_HORIZONTAL_BEAMS = 51;
     public static final int DEFAULT_VERTICAL_BEAMS = 5;
     public static final int DEFAULT_MAXIMUM_SONAR_RANGE = 96;
@@ -60,25 +63,25 @@ public final class ServerConfig {
         }
         ADDITIONAL_RAYS = builder.comment(
                         "Additional rays emitted around a primary hit. Allowed values: 4, 8, or 16.")
-                .define("scanning.additionalRays", 4, ServerConfig::validAdditionalRays);
+                .define("scanning.additionalRays", DEFAULT_PRESET.additionalRays(), ServerConfig::validAdditionalRays);
         REFINE_ONLY_UNDETECTED_NEIGHBORS = builder.comment(
                         "Only emit additional rays if no previously detected block is adjacent to the hit.")
-                .define("scanning.refineOnlyUndetectedNeighbors", false);
+                .define("scanning.refineOnlyUndetectedNeighbors", DEFAULT_PRESET.refineOnlyUndetectedNeighbors());
         HIT_REFINEMENT_BACKTRACK_BLOCKS = builder.comment(
                         "Minimum blocks before a hit that refinement rays re-scan; wide beam gaps increase this distance. 0 disables refinement.")
-                .defineInRange("scanning.hitRefinementBacktrackBlocks", 5, 0, 16);
+                .defineInRange("scanning.hitRefinementBacktrackBlocks", DEFAULT_PRESET.hitRefinementBacktrackBlocks(), 0, 16);
         BLOCKS_PER_TICK = builder.comment("Blocks advanced by each sub-ray per server tick.")
-                .defineInRange("scanning.blocksPerTick", 10, 1, 16);
+                .defineInRange("scanning.blocksPerTick", DEFAULT_PRESET.blocksPerTick(), 1, 16);
         PING_PAUSE_TICKS = builder.comment("Server ticks to wait after a completed ping before starting the next one.")
-                .defineInRange("scanning.pingPauseTicks", 20, 0, 200);
+                .defineInRange("scanning.pingPauseTicks", DEFAULT_PRESET.pingPauseTicks(), 0, 200);
         SIDE_SCAN_PING_PAUSE_TICKS = builder.comment(
                         "Server ticks to wait after a completed side-scan ping. Lower values update faster.")
-                .defineInRange("scanning.sideScanPingPauseTicks", 20, 0, 200);
+                .defineInRange("scanning.sideScanPingPauseTicks", DEFAULT_PRESET.pingPauseTicks(), 0, 200);
         SIDE_SCAN_MOVEMENT_ONLY = builder.comment(
                         "Only start a new side-scan sonar ping after it moves at least half a block.")
                 .define("scanning.sideScanMovementOnly", false);
         MAX_CHUNK_READS = builder.comment("Maximum asynchronous unloaded chunk NBT reads per level.")
-                .defineInRange("scanning.maxConcurrentChunkReads", 2, 1, 8);
+                .defineInRange("scanning.maxConcurrentChunkReads", DEFAULT_PRESET.maxConcurrentChunkReads(), 1, 8);
         TRACE_WORKER_THREADS = builder.comment("Worker threads used for sonar ray tracing.")
                 .defineInRange("scanning.traceWorkerThreads", defaultTraceWorkerThreads(), 1, 8);
         MAXIMUM_SONAR_RANGE = builder.comment(
@@ -90,7 +93,7 @@ public final class ServerConfig {
                 .define("scanning.angleRangeReduction", true);
         ENTITY_OCCLUSION_CHECK = builder.comment(
                         "Hide entity tracks when a solid block blocks the direct sonar ray. Disabled by default.")
-                .define("scanning.entityOcclusionCheck", false);
+                .define("scanning.entityOcclusionCheck", DEFAULT_PRESET.entityOcclusionCheck());
         TRACE_TIME_PROFILING = builder.comment(
                         "Log aggregate worker and batch trace time for all sonars every 10 seconds.")
                 .define("debug.traceTime10s", false);
@@ -238,12 +241,11 @@ public final class ServerConfig {
     }
 
     public static int defaultTraceWorkerThreads() {
-        return Math.min(4, Math.max(1, Runtime.getRuntime().availableProcessors() - 1));
+        return DEFAULT_PRESET.traceWorkerThreads();
     }
 
     public static int defaultHorizontalBeams(SonarType type) {
-        return type == SonarType.SIDE_SCAN_D ? SideScanGeometry.MAX_HORIZONTAL_BEAMS
-                : DEFAULT_HORIZONTAL_BEAMS;
+        return DEFAULT_PRESET.beams(type).horizontal();
     }
 
     public static int minimumHorizontalBeams(SonarType type) {
@@ -255,7 +257,7 @@ public final class ServerConfig {
     }
 
     public static int defaultVerticalBeams(SonarType type) {
-        return type == SonarType.SIDE_SCAN_D ? 9 : DEFAULT_VERTICAL_BEAMS;
+        return DEFAULT_PRESET.beams(type).vertical();
     }
 
     public static int minimumVerticalBeams(SonarType type) {

@@ -25,6 +25,8 @@ import org.rassvet.create_echo_radars.content.sonar.MechanicalSweepBuffer;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayProjection;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayLayout;
 import org.rassvet.create_echo_radars.content.sonar.SonarFrame;
+import org.rassvet.create_echo_radars.content.sonar.SonarRefreshSequence;
+import org.rassvet.create_echo_radars.content.sonar.SonarRevealAnimation;
 import org.rassvet.create_echo_radars.content.sonar.SonarMath;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorDimensions;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorExtension;
@@ -56,11 +58,8 @@ public final class SonarMonitorRenderer {
     private static final float SIDE_SCAN_LABEL_INSET = 0.70f;
     private static final int ARC_STEPS = 48;
     private static final int BACKGROUND_RASTER_RESOLUTION = 256;
-    private static final float REVEAL_COMPLETE_EPSILON = 1.0e-4f;
     private static final float REVEAL_EDGE_MIN_WIDTH = 0.035f;
     private static final float REVEAL_EDGE_RANGE_CELLS = 8;
-    private static final int MAX_REVEAL_STATES = 2048;
-    private static final double REVEAL_STATE_TTL_TICKS = 80;
     private static final int MAX_FRAME_ECHO_LAYOUTS = 2048;
     private static final int MAX_CLIENT_HISTORIES = 512;
     private static final int MAX_LOCAL_FRAMES = 512;
@@ -69,7 +68,6 @@ public final class SonarMonitorRenderer {
     private static final float MECHANICAL_SAMPLE_DEGREES =
             SonarRotation.MECHANICAL_SCAN_STEP_DEGREES;
     private static final float MECHANICAL_PREFETCH_ARC_DEGREES = 120;
-    private static final Map<RevealKey, RevealState> REVEAL_STATES = new HashMap<>();
     private static final Map<FrameLayoutKey, CachedFrameEchoLayout> FRAME_ECHO_LAYOUTS = new HashMap<>();
     private static final Map<ClientHistoryKey, ClientFrameHistory> CLIENT_HISTORIES = new HashMap<>();
     private static long clientHistoryAccessSequence;
@@ -78,7 +76,6 @@ public final class SonarMonitorRenderer {
     private SonarMonitorRenderer() {}
 
     public static void clearCaches() {
-        REVEAL_STATES.clear();
         FRAME_ECHO_LAYOUTS.clear();
         CLIENT_HISTORIES.clear();
         clientHistoryAccessSequence = 0;
@@ -228,55 +225,42 @@ public final class SonarMonitorRenderer {
         float revealBand = Math.max(REVEAL_EDGE_MIN_WIDTH, rangeWidth * REVEAL_EDGE_RANGE_CELLS);
         ClientFrameHistory clientHistory = clientHistory(monitor, snapshot);
         List<SonarFrame> frames = clientHistory.frames();
-        SonarFrame activeFrame = null;
-        long latestCompletedEpoch = Long.MIN_VALUE;
-        for (SonarFrame frame : frames) {
-            if (frame.completedTick() == 0) activeFrame = frame;
-            else latestCompletedEpoch = Math.max(latestCompletedEpoch, frame.epoch());
-        }
+        SonarRefreshSequence sequence = SonarRefreshSequence.select(
+                frames, clientHistory.fullyRefreshedEpoch());
+        SonarFrame refreshingFrame = sequence.refreshing();
         float revealSpeed = SonarDisplayLayout.revealProgressPerTick(
                 SyncedServerConfig.blocksPerTick(), snapshot.range());
-        SonarFrame latestCompletedFrame = null;
-        for (SonarFrame frame : frames) {
-            if (frame.completedTick() != 0 && frame.epoch() == latestCompletedEpoch) {
-                latestCompletedFrame = frame;
-                break;
-            }
-        }
-        RevealState latestCompletedState = latestCompletedFrame == null ? null
-                : smoothRevealState(monitor, latestCompletedFrame, gameTime, partialTick, revealSpeed, true);
-        boolean nextAnimationAllowed = latestCompletedState == null || latestCompletedState.fullyRevealed();
-        RevealState activeState = activeFrame == null ? null
-                : smoothRevealState(monitor, activeFrame, gameTime, partialTick,
-                        revealSpeed, nextAnimationAllowed);
-        float activeRevealProgress = activeState == null ? 0 : activeState.progress;
-        if (activeFrame != null && activeRevealProgress >= 1 - REVEAL_COMPLETE_EPSILON) {
-            clientHistory.markFullyRefreshed(activeFrame.epoch());
-        } else if (latestCompletedFrame != null && latestCompletedState != null
-                && latestCompletedState.fullyRevealed()) {
-            clientHistory.markFullyRefreshed(latestCompletedFrame.epoch());
+        double now = gameTime + partialTick;
+        SonarRevealAnimation refreshingState = refreshingFrame == null ? null
+                : clientHistory.revealState(refreshingFrame, now, revealSpeed);
+        if (refreshingFrame != null && refreshingState.fullyRevealed()) {
+            clientHistory.markFullyRefreshed(refreshingFrame.epoch());
         }
         int oldPixelLifetime = ClientConfig.oldPixelLifetimeTicks();
         for (int frameIndex = 0; frameIndex < frames.size(); frameIndex++) {
             SonarFrame frame = frames.get(frameIndex);
             boolean completed = frame.completedTick() != 0;
-            boolean latestCompleted = frame.epoch() == latestCompletedEpoch;
+            if (sequence.pending(frame)) continue;
             if (completed && SonarDisplayLayout.hideOldFrameAfterFullRefresh(
                     ClientConfig.clearOldPixelsWhenRefreshed(), frame.epoch(),
                     clientHistory.fullyRefreshedEpoch())) continue;
-            if (completed && oldPixelLifetime <= 0 && !latestCompleted) continue;
-            RevealState revealState;
-            if (frame == activeFrame) {
-                revealState = activeState;
-            } else if (frame == latestCompletedFrame) {
-                revealState = latestCompletedState;
+            SonarRevealAnimation revealState;
+            if (frame == refreshingFrame) {
+                revealState = refreshingState;
             } else {
-                revealState = smoothRevealState(monitor, frame, gameTime, partialTick, revealSpeed, true);
+                revealState = clientHistory.revealState(frame, now, revealSpeed);
             }
-            float revealProgress = revealState == null ? 0 : revealState.progress;
-            long lifetimeAge = revealState == null || !revealState.fullyRevealed()
-                    ? 0 : (long) Math.floor(Math.max(0,
-                    gameTime + partialTick - revealState.fullyRevealedAt));
+            float revealProgress = revealState.progress();
+            double lifetimeAge = revealState.age(now);
+            float frameAlpha = completed && frame != refreshingFrame
+                    ? SonarDisplayLayout.forwardFrameAlpha(oldPixelLifetime, lifetimeAge,
+                    frame.epoch() < clientHistory.fullyRefreshedEpoch()) : 1;
+            if (frameAlpha <= 0) continue;
+            boolean fullyReplaced = frame.epoch() < clientHistory.fullyRefreshedEpoch();
+            boolean replacementActive = fullyReplaced || refreshingFrame != null
+                    && frame.epoch() < refreshingFrame.epoch();
+            float replacementProgress = fullyReplaced ? 1
+                    : refreshingState == null ? 0 : refreshingState.progress();
             List<SonarReturn> returns = frame.returns();
             FrameEchoLayout frameLayout = echoLayout(monitor, snapshot, frame);
             for (int returnIndex = 0; returnIndex < returns.size(); returnIndex++) {
@@ -285,18 +269,11 @@ public final class SonarMonitorRenderer {
                 if (sonarReturn.rangeBin() >= displayRange) continue;
                 float revealAlpha = revealAlpha(sonarReturn.normalizedDistance(), revealProgress, revealBand);
                 if (revealAlpha <= 0) continue;
-                float frameAlpha = 1;
-                if (completed) {
-                    boolean newAnimationActive = activeFrame != null && nextAnimationAllowed;
-                    float newSweepAlpha = !newAnimationActive ? 0 : revealAlpha(
-                            sonarReturn.normalizedDistance(), activeRevealProgress, revealBand);
-                    frameAlpha = SonarDisplayLayout.oldFrameAlpha(oldPixelLifetime,
-                            lifetimeAge, newAnimationActive,
-                            newSweepAlpha, latestCompleted);
-                    if (frameAlpha <= 0) continue;
-                }
+                float pixelAlpha = SonarDisplayLayout.forwardPixelAlpha(frameAlpha,
+                        sonarReturn.normalizedDistance(), replacementProgress, replacementActive);
+                if (pixelAlpha <= 0) continue;
                 float grainNoise = noise(sonarReturn.beam() / 3 * 7349
-                        ^ sonarReturn.rangeBin() / 2 * 9151 ^ (int) frame.epoch());
+                        ^ sonarReturn.rangeBin() / 2 * 9151);
                 float speckle = ClientConfig.speckle() * 0.2f;
                 float grain = 1 - speckle + grainNoise * speckle * 2;
                 float linearStrength = Math.max(0, Math.min(1,
@@ -307,7 +284,7 @@ public final class SonarMonitorRenderer {
                 renderPixel(points, poseStack.last(), area, sonarReturn,
                         frameLayout.bearings()[returnIndex],
                         frameLayout.angularResolutions()[returnIndex], snapshot, displayRange,
-                        ECHO_DEPTH, palette.color(strength), frameAlpha * revealAlpha);
+                        ECHO_DEPTH, palette.color(strength), pixelAlpha * revealAlpha);
             }
         }
     }
@@ -1086,6 +1063,7 @@ public final class SonarMonitorRenderer {
 
     private static final class ClientFrameHistory {
         private final LinkedHashMap<Long, SonarFrame> completed = new LinkedHashMap<>();
+        private final Map<FrameIdentity, SonarRevealAnimation> revealStates = new HashMap<>();
         private final MechanicalSweepBuffer<MechanicalPixelKey, SonarReturn> mechanicalDisplay =
                 new MechanicalSweepBuffer<>(MECHANICAL_SAMPLE_DEGREES,
                         MECHANICAL_PREFETCH_ARC_DEGREES);
@@ -1104,6 +1082,7 @@ public final class SonarMonitorRenderer {
             ClientSnapshotSignature nextSignature = ClientSnapshotSignature.from(snapshot);
             if (!nextSignature.equals(signature)) {
                 completed.clear();
+                revealStates.clear();
                 clearMechanicalDisplay();
                 sideScanFrames.clear();
                 current = null;
@@ -1114,6 +1093,7 @@ public final class SonarMonitorRenderer {
             List<SonarFrame> serverFrames = snapshot.frames();
             if (serverSessionRestarted(serverFrames)) {
                 completed.clear();
+                revealStates.clear();
                 clearMechanicalDisplay();
                 sideScanFrames.clear();
                 current = null;
@@ -1140,7 +1120,9 @@ public final class SonarMonitorRenderer {
             while (completed.size() > MAX_LOCAL_FRAMES) {
                 Iterator<Long> iterator = completed.keySet().iterator();
                 long removedEpoch = iterator.next();
+                SonarFrame removed = completed.get(removedEpoch);
                 iterator.remove();
+                revealStates.remove(new FrameIdentity(removed.epoch(), removed.startedTick()));
                 mechanicalFrameRevisions.remove(removedEpoch);
                 sideScanFrames.remove(removedEpoch);
                 changed = true;
@@ -1155,6 +1137,14 @@ public final class SonarMonitorRenderer {
 
         private List<SonarFrame> frames() {
             return cachedFrames;
+        }
+
+        private SonarRevealAnimation revealState(SonarFrame frame, double now, float speed) {
+            FrameIdentity key = new FrameIdentity(frame.epoch(), frame.startedTick());
+            SonarRevealAnimation state = revealStates.computeIfAbsent(key,
+                    ignored -> new SonarRevealAnimation(now));
+            state.advance(frame.revealProgress(), frame.completedTick() != 0, now, speed);
+            return state;
         }
 
         private void markFullyRefreshed(long epoch) {
@@ -1253,6 +1243,7 @@ public final class SonarMonitorRenderer {
         }
 
         private boolean serverSessionRestarted(List<SonarFrame> serverFrames) {
+            if (serverFrames.isEmpty()) return false;
             long localMaxEpoch = current == null ? Long.MIN_VALUE : current.epoch();
             for (long epoch : completed.keySet()) localMaxEpoch = Math.max(localMaxEpoch, epoch);
             long incomingMaxEpoch = Long.MIN_VALUE;
@@ -1266,6 +1257,8 @@ public final class SonarMonitorRenderer {
             return localMaxEpoch != Long.MIN_VALUE && incomingMaxEpoch < localMaxEpoch;
         }
     }
+
+    private record FrameIdentity(long epoch, long startedTick) {}
 
     private record MechanicalPixelKey(int rangeBin, int bearingDeciDegrees) {
         private static MechanicalPixelKey from(SonarReturn sonarReturn) {
@@ -1293,13 +1286,15 @@ public final class SonarMonitorRenderer {
                     == org.rassvet.create_echo_radars.content.sonar.SonarType.MECHANICAL_IMAGING_C;
             boolean waterfall = snapshot.sonarType()
                     == org.rassvet.create_echo_radars.content.sonar.SonarType.SIDE_SCAN_D;
+            boolean relativeDisplay = rotating || waterfall || snapshot.sonarType()
+                    == org.rassvet.create_echo_radars.content.sonar.SonarType.FORWARD_LOOKING_F;
             return new ClientSnapshotSignature(snapshot.range(), snapshot.horizontalSector(),
                     snapshot.verticalSector(), snapshot.sonarType(), snapshot.horizontalBeams(),
                     rotating ? Float.compare(snapshot.scanAngularSpeed(), 0) : 0,
-                    snapshot.autoHeight(), waterfall || rotating ? Vec3.ZERO : snapshot.origin(),
-                    waterfall || rotating ? Vec3.ZERO : snapshot.forward(),
-                    waterfall || rotating ? Vec3.ZERO : snapshot.right(),
-                    waterfall || rotating ? Vec3.ZERO : snapshot.up());
+                    snapshot.autoHeight(), relativeDisplay ? Vec3.ZERO : snapshot.origin(),
+                    relativeDisplay ? Vec3.ZERO : snapshot.forward(),
+                    relativeDisplay ? Vec3.ZERO : snapshot.right(),
+                    relativeDisplay ? Vec3.ZERO : snapshot.up());
         }
     }
 
@@ -1551,42 +1546,6 @@ public final class SonarMonitorRenderer {
                 color.red(), color.green(), color.blue(), alpha);
     }
 
-    private static RevealState smoothRevealState(MonitorBlockEntity monitor, SonarFrame frame,
-                                                 long gameTime, float partialTick, float speed,
-                                                 boolean advance) {
-        float cap = frame.completedTick() == 0 ? frame.revealProgress() : 1;
-        RevealKey key = new RevealKey(monitor.getBlockPos().asLong(), frame.epoch());
-        double now = gameTime + partialTick;
-        pruneRevealStates(key, now);
-        RevealState state = REVEAL_STATES.computeIfAbsent(key, ignored -> new RevealState(now));
-        double elapsed = Math.max(0, now - state.lastTick);
-        state.lastTick = now;
-        if (!advance) return state;
-        state.progress = SonarDisplayLayout.advanceRevealProgress(
-                state.progress, cap, elapsed, speed);
-        if (frame.completedTick() != 0 && state.progress >= 1 - REVEAL_COMPLETE_EPSILON
-                && Double.isNaN(state.fullyRevealedAt)) {
-            state.progress = 1;
-            state.fullyRevealedAt = now;
-        }
-        return state;
-    }
-
-    private static void pruneRevealStates(RevealKey current, double now) {
-        REVEAL_STATES.entrySet().removeIf(entry -> !entry.getKey().equals(current)
-                && now - entry.getValue().lastTick > REVEAL_STATE_TTL_TICKS);
-        if (REVEAL_STATES.size() < MAX_REVEAL_STATES || REVEAL_STATES.containsKey(current)) return;
-        RevealKey oldestKey = null;
-        double oldestTick = Double.POSITIVE_INFINITY;
-        for (Map.Entry<RevealKey, RevealState> entry : REVEAL_STATES.entrySet()) {
-            if (entry.getValue().lastTick < oldestTick) {
-                oldestTick = entry.getValue().lastTick;
-                oldestKey = entry.getKey();
-            }
-        }
-        if (oldestKey != null) REVEAL_STATES.remove(oldestKey);
-    }
-
     private static float revealAlpha(float distance, float revealProgress, float revealBand) {
         if (revealProgress >= 1) return 1;
         if (distance >= revealProgress) return 0;
@@ -1594,22 +1553,6 @@ public final class SonarMonitorRenderer {
         if (distance <= fadeStart) return 1;
         float t = (revealProgress - distance) / Math.max(1.0e-4f, revealBand);
         return t * t * (3 - 2 * t);
-    }
-
-    private record RevealKey(long monitorPos, long epoch) {}
-
-    private static final class RevealState {
-        private float progress;
-        private double lastTick;
-        private double fullyRevealedAt = Double.NaN;
-
-        private RevealState(double now) {
-            this.lastTick = now;
-        }
-
-        private boolean fullyRevealed() {
-            return !Double.isNaN(fullyRevealedAt);
-        }
     }
 
     private static float noise(int seed) {
