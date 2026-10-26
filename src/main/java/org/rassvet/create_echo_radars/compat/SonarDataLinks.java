@@ -1,13 +1,9 @@
-package org.rassvet.create_echo_radars.mixin;
+package org.rassvet.create_echo_radars.compat;
 
 import com.happysg.radar.block.datalink.DataLinkBlockItem;
 import com.happysg.radar.block.datalink.DataLinkBlock;
 import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.controller.networkcontroller.NetworkFiltererBlockEntity;
-import com.happysg.radar.compat.vs2.PhysicsHandler;
-import com.happysg.radar.config.RadarConfig;
-import com.happysg.radar.registry.ModBlocks;
-import net.createmod.catnip.config.ConfigBase;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -23,9 +19,7 @@ import net.minecraft.stats.Stats;
 import net.minecraft.world.level.gameevent.GameEvent;
 import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.item.context.UseOnContext;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
-import org.rassvet.create_echo_radars.content.sonar.SonarBlock;
 import org.rassvet.create_echo_radars.ModNetworking;
 import org.rassvet.create_echo_radars.content.glass.SonarGlass;
 import org.rassvet.create_echo_radars.content.glass.SonarGlassNetwork;
@@ -35,36 +29,86 @@ import org.rassvet.create_echo_radars.content.summator.SonarSignalSummatorBlockE
 import org.rassvet.create_echo_radars.content.sonar.SonarBlockEntity;
 import org.rassvet.create_echo_radars.content.sonar.SonarDataLinkBlock;
 import org.rassvet.create_echo_radars.content.sonar.SonarVoxelShapes;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(value = DataLinkBlockItem.class, remap = false)
-public abstract class DataLinkBlockItemMixin {
-    @Inject(method = "useOn", at = @At("HEAD"), cancellable = true)
-    private void createEchoRadars$attachSonarGlass(UseOnContext ctx,
-                                                   CallbackInfoReturnable<InteractionResult> cir) {
+public final class SonarDataLinks {
+    private SonarDataLinks() {}
+
+    public static void register() {
+        com.happysg.radar.api.datalink.RadarDataLinkRegistry.register((level, pos) ->
+                level.getBlockEntity(pos) instanceof SonarBlockEntity
+                        || level.getBlockEntity(pos) instanceof SonarSignalSummatorBlockEntity
+                        || SonarGlass.isGlass(level, pos)
+                ? new com.happysg.radar.api.datalink.RadarDataLinkEndpoint(pos,
+                        level.getBlockEntity(pos) instanceof SonarBlockEntity
+                                ? com.happysg.radar.api.datalink.RadarDataLinkEndpointType.RADAR
+                                : com.happysg.radar.api.datalink.RadarDataLinkEndpointType.CUSTOM) : null);
+        com.happysg.radar.api.datalink.RadarDataLinkInteractionRegistry.register(context -> {
+            var hand = context.player().getMainHandItem() == context.dataLinkStack()
+                    ? net.minecraft.world.InteractionHand.MAIN_HAND : net.minecraft.world.InteractionHand.OFF_HAND;
+            var hit = new net.minecraft.world.phys.BlockHitResult(context.clickLocation(),
+                    context.clickedFace(), context.clickedPos(), false);
+            InteractionResult result = handle(new UseOnContext(context.player(), hand, hit));
+            return result == InteractionResult.PASS
+                    ? com.happysg.radar.api.datalink.RadarDataLinkInteraction.Result.PASS
+                    : result == InteractionResult.FAIL
+                    ? com.happysg.radar.api.datalink.RadarDataLinkInteraction.Result.FAIL
+                    : com.happysg.radar.api.datalink.RadarDataLinkInteraction.Result.SUCCESS;
+        });
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(SonarDataLinks::onShiftClick);
+    }
+
+    private static void onShiftClick(net.neoforged.neoforge.event.entity.player.PlayerInteractEvent.RightClickBlock event) {
+        if (!(event.getItemStack().getItem() instanceof DataLinkBlockItem)) return;
+        var be = event.getLevel().getBlockEntity(event.getPos());
+        if (!event.getEntity().isShiftKeyDown()) {
+            if (be instanceof SonarBlockEntity) {
+                InteractionResult result = handle(new UseOnContext(event.getEntity(), event.getHand(), event.getHitVec()));
+                event.setCanceled(true);
+                event.setCancellationResult(result);
+            }
+            return;
+        }
+        if (!(be instanceof SonarBlockEntity sonar && sonar.hasDataLink())
+                && !(be instanceof SonarSignalSummatorBlockEntity)) return;
+        InteractionResult result = handle(new UseOnContext(event.getEntity(), event.getHand(), event.getHitVec()));
+        event.setCanceled(true);
+        event.setCancellationResult(result);
+    }
+
+    private static InteractionResult handle(UseOnContext ctx) {
+        if (!ctx.getLevel().isClientSide && ctx.getPlayer() != null && !ctx.getPlayer().isShiftKeyDown()) {
+            CompoundTag selection = ctx.getItemInHand().getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag();
+            if (selection.contains("SelectedDimension") && !ctx.getLevel().dimension().location().toString()
+                    .equals(selection.getString("SelectedDimension"))) {
+                error(ctx, "create_radar.data_link.invalid_selection");
+                return InteractionResult.FAIL;
+            }
+        }
+        var result = new java.util.concurrent.atomic.AtomicReference<>(InteractionResult.PASS);
+        attach(ctx, result::set);
+        return result.get();
+    }
+    private static void attach(UseOnContext ctx,
+                               java.util.function.Consumer<InteractionResult> result) {
         BlockPos clickedPos = ctx.getClickedPos();
         if (ctx.getLevel().getBlockEntity(clickedPos) instanceof SonarBlockEntity sonar) {
             if (ctx.getPlayer() != null && ctx.getPlayer().isShiftKeyDown()
                     && !sonar.hasDataLink()) return;
-            createEchoRadars$useSonar(ctx, sonar, cir);
+            useSonar(ctx, sonar, result);
             return;
         }
         if (ctx.getLevel().getBlockEntity(clickedPos) instanceof SonarSignalSummatorBlockEntity summator) {
-            createEchoRadars$useSummator(ctx, summator, cir);
+            useSummator(ctx, summator, result);
             return;
         }
         if (!SonarGlass.isGlass(ctx.getLevel(), clickedPos)) return;
         if (ctx.getPlayer() == null) {
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         if (ctx.getPlayer().isShiftKeyDown()) return;
         if (ctx.getLevel().isClientSide) {
-            cir.setReturnValue(InteractionResult.SUCCESS);
+            result.accept(InteractionResult.SUCCESS);
             return;
         }
         ServerLevel level = (ServerLevel) ctx.getLevel();
@@ -73,44 +117,35 @@ public abstract class DataLinkBlockItemMixin {
         BlockPos filtererPos = NbtUtils.readBlockPos(tag, "SelectedFiltererPos").orElse(null);
         if (filtererPos == null || !(level.getBlockEntity(filtererPos) instanceof NetworkFiltererBlockEntity)) {
             error(ctx, "message.create_echo_radars.sonar_glass.select_controller");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         SonarGlassNetwork.Component component = SonarGlassNetwork.find(level, clickedPos);
         if (component.overflow()) {
             error(ctx, "message.create_echo_radars.sonar_glass.too_large");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         NetworkData data = NetworkData.get(level);
         for (BlockPos pos : component.blocks()) {
             if (data.getFiltererForEndpoint(level.dimension(), pos) != null) {
                 error(ctx, "message.create_echo_radars.sonar_glass.already_linked");
-                cir.setReturnValue(InteractionResult.FAIL);
+                result.accept(InteractionResult.FAIL);
                 return;
             }
         }
         BlockState clickedState = level.getBlockState(clickedPos);
         BlockPos placedPos = clickedPos.relative(ctx.getClickedFace(), clickedState.canBeReplaced() ? 0 : 1);
-        double range = createEchoRadars$linkRange();
-        if (!PhysicsHandler.getWorldPos(level, placedPos).getCenter().closerThan(
-                PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)
-                || !PhysicsHandler.getWorldPos(level, placedPos).getCenter().closerThan(
-                PhysicsHandler.getWorldPos(level, clickedPos).getCenter(), range)) {
-            error(ctx, "display_link.too_far");
-            cir.setReturnValue(InteractionResult.FAIL);
-            return;
-        }
         NetworkData.Group group = data.getOrCreateGroup(level.dimension(), filtererPos);
         if (!data.canAttachMonitor(group, clickedPos)) {
             error(ctx, "create_radar.data_link.filter_attach_denied");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
-        InteractionResult placed = ((BlockItem) (Object) this).place(new BlockPlaceContext(ctx));
+        InteractionResult placed = ((BlockItem) ctx.getItemInHand().getItem()).place(new BlockPlaceContext(ctx));
         if (placed == InteractionResult.FAIL || !(level.getBlockState(placedPos).getBlock() instanceof DataLinkBlock)) {
             error(ctx, "create_radar.data_link.place_failed");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         BlockState linkState = level.getBlockState(placedPos);
@@ -125,18 +160,18 @@ public abstract class DataLinkBlockItemMixin {
         ModNetworking.sendGlassPulse(level, clickedPos, level.getGameTime());
         ctx.getPlayer().displayClientMessage(Component.translatable("display_link.success")
                 .withStyle(ChatFormatting.GREEN), true);
-        cir.setReturnValue(InteractionResult.SUCCESS);
+        result.accept(InteractionResult.SUCCESS);
     }
 
-    private void createEchoRadars$useSonar(
+    private static void useSonar(
             UseOnContext ctx, SonarBlockEntity sonar,
-            CallbackInfoReturnable<InteractionResult> cir) {
+            java.util.function.Consumer<InteractionResult> result) {
         if (ctx.getPlayer() == null) {
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         if (ctx.getLevel().isClientSide) {
-            cir.setReturnValue(InteractionResult.SUCCESS);
+            result.accept(InteractionResult.SUCCESS);
             return;
         }
 
@@ -154,12 +189,12 @@ public abstract class DataLinkBlockItemMixin {
                         "message.create_echo_radars.sonar.data_link_removed")
                         .withStyle(ChatFormatting.YELLOW), true);
             }
-            cir.setReturnValue(InteractionResult.SUCCESS);
+            result.accept(InteractionResult.SUCCESS);
             return;
         }
         if (sonar.hasDataLink()) {
             error(ctx, "message.create_echo_radars.sonar.data_link_already_installed");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
 
@@ -171,28 +206,21 @@ public abstract class DataLinkBlockItemMixin {
         if (filtererPos == null || !(level.getBlockEntity(filtererPos)
                 instanceof NetworkFiltererBlockEntity filterer)) {
             error(ctx, "message.create_echo_radars.sonar_glass.select_controller");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
 
-        double range = createEchoRadars$linkRange();
-        if (!PhysicsHandler.getWorldPos(level, sonar.getBlockPos()).getCenter().closerThan(
-                PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)) {
-            error(ctx, "display_link.too_far");
-            cir.setReturnValue(InteractionResult.FAIL);
-            return;
-        }
 
         NetworkData data = NetworkData.get(level);
         if (data.getFiltererForEndpoint(level.dimension(), sonar.getBlockPos()) != null) {
             error(ctx, "message.create_echo_radars.sonar.data_link_already_installed");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         NetworkData.Group group = data.getOrCreateGroup(level.dimension(), filtererPos);
-        if (!data.canAttachRadar(group, sonar.getBlockPos(), NetworkData.RadarKind.STATIONARY)) {
+        if (!data.canAttachRadar(group, sonar.getBlockPos())) {
             error(ctx, "create_radar.data_link.filter_attach_denied");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
 
@@ -200,11 +228,11 @@ public abstract class DataLinkBlockItemMixin {
         BlockPos placedPos = sonar.getBlockPos().relative(ctx.getClickedFace(),
                 clickedState.canBeReplaced() ? 0 : 1);
         boolean waterlogged = level.getFluidState(placedPos).is(net.minecraft.tags.FluidTags.WATER);
-        InteractionResult placed = ((BlockItem) (Object) this).place(new BlockPlaceContext(ctx));
+        InteractionResult placed = ((BlockItem) ctx.getItemInHand().getItem()).place(new BlockPlaceContext(ctx));
         if (placed == InteractionResult.FAIL
                 || !(level.getBlockState(placedPos).getBlock() instanceof DataLinkBlock)) {
             error(ctx, "create_radar.data_link.place_failed");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         BlockState miniState = org.rassvet.create_echo_radars.CreateEchoRadars.SONAR_DATA_LINK.get()
@@ -221,25 +249,25 @@ public abstract class DataLinkBlockItemMixin {
                 SonarSignalSummatorBlock.returnDataLink(level, sonar.getBlockPos(), ctx.getPlayer());
             }
             error(ctx, "message.create_echo_radars.sonar.data_link_already_installed");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
 
-        data.attachRadar(group, sonar.getBlockPos(), NetworkData.RadarKind.STATIONARY);
+        data.attachRadar(level, group, sonar.getBlockPos());
         data.addDataLinkToGroup(group, placedPos, sonar.getBlockPos());
         filterer.applyFiltersToNetwork();
         stack.remove(DataComponents.CUSTOM_DATA);
         ctx.getPlayer().displayClientMessage(Component.translatable(
                 "message.create_echo_radars.sonar.data_link_installed")
                 .withStyle(ChatFormatting.GREEN), true);
-        cir.setReturnValue(InteractionResult.SUCCESS);
+        result.accept(InteractionResult.SUCCESS);
     }
 
-    private static void createEchoRadars$useSummator(
+    private static void useSummator(
             UseOnContext ctx, SonarSignalSummatorBlockEntity summator,
-            CallbackInfoReturnable<InteractionResult> cir) {
+            java.util.function.Consumer<InteractionResult> result) {
         if (ctx.getPlayer() == null) {
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         int slot = SonarSignalSummatorBlock.slotAt(summator.getBlockState(),
@@ -248,11 +276,11 @@ public abstract class DataLinkBlockItemMixin {
                         ctx.getClickedPos(), false));
         if (slot < 0) {
             error(ctx, "message.create_echo_radars.signal_summator.aim_at_slot");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         if (ctx.getLevel().isClientSide) {
-            cir.setReturnValue(InteractionResult.SUCCESS);
+            result.accept(InteractionResult.SUCCESS);
             return;
         }
         if (ctx.getPlayer().isShiftKeyDown()) {
@@ -265,12 +293,12 @@ public abstract class DataLinkBlockItemMixin {
             } else {
                 error(ctx, "message.create_echo_radars.signal_summator.slot_empty");
             }
-            cir.setReturnValue(InteractionResult.SUCCESS);
+            result.accept(InteractionResult.SUCCESS);
             return;
         }
         if (summator.hasAntenna(slot)) {
             error(ctx, "message.create_echo_radars.signal_summator.slot_occupied");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
 
@@ -282,33 +310,25 @@ public abstract class DataLinkBlockItemMixin {
         if (filtererPos == null || !(ctx.getLevel().getBlockEntity(filtererPos)
                 instanceof NetworkFiltererBlockEntity)) {
             error(ctx, "message.create_echo_radars.sonar_glass.select_controller");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         ServerLevel level = (ServerLevel) ctx.getLevel();
         NetworkData.Group group = NetworkData.get(level).getGroup(
                 level.dimension(), filtererPos);
-        if (group == null || group.radarPos == null
-                || !(level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity)) {
+        if (group == null || RadarsApi.sonars(level, filtererPos).isEmpty()) {
             error(ctx, "message.create_echo_radars.signal_summator.controller_has_no_sonar");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         if (summator.hasFilterer(filtererPos)) {
             error(ctx, "message.create_echo_radars.signal_summator.already_installed");
-            cir.setReturnValue(InteractionResult.FAIL);
-            return;
-        }
-        double range = createEchoRadars$linkRange();
-        if (!PhysicsHandler.getWorldPos(level, ctx.getClickedPos()).getCenter().closerThan(
-                PhysicsHandler.getWorldPos(level, filtererPos).getCenter(), range)) {
-            error(ctx, "display_link.too_far");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         if (!summator.installAntenna(slot, filtererPos)) {
             error(ctx, "message.create_echo_radars.signal_summator.slot_occupied");
-            cir.setReturnValue(InteractionResult.FAIL);
+            result.accept(InteractionResult.FAIL);
             return;
         }
         ctx.getPlayer().awardStat(Stats.ITEM_USED.get(stack.getItem()));
@@ -318,35 +338,11 @@ public abstract class DataLinkBlockItemMixin {
         ctx.getPlayer().displayClientMessage(Component.translatable(
                 "message.create_echo_radars.signal_summator.antenna_installed",
                 slot + 1).withStyle(ChatFormatting.GREEN), true);
-        cir.setReturnValue(InteractionResult.SUCCESS);
+        result.accept(InteractionResult.SUCCESS);
     }
 
     private static void error(UseOnContext ctx, String key) {
         ctx.getPlayer().displayClientMessage(Component.translatable(key).withStyle(ChatFormatting.RED), true);
     }
 
-    private static double createEchoRadars$linkRange() {
-        try {
-            var config = RadarConfig.server();
-            var range = (ConfigBase.ConfigInt) config.getClass().getField("radarLinkRange").get(config);
-            return range.get();
-        } catch (ReflectiveOperationException missingLegacyRange) {
-            // Radars 5.0-EA removed this setting and no longer limits Data Link distance.
-            return Double.POSITIVE_INFINITY;
-        }
-    }
-
-    @Redirect(
-            method = "getFilterTarget",
-            require = 0,
-            at = @At(
-                    value = "INVOKE",
-                    target = "Lnet/minecraft/world/level/block/state/BlockState;getBlock()Lnet/minecraft/world/level/block/Block;",
-                    ordinal = 1
-            )
-    )
-    private static Block createEchoRadars$acceptSonarAsStationaryRadar(BlockState state) {
-        Block block = state.getBlock();
-        return block instanceof SonarBlock ? ModBlocks.STATIONARY_RADAR.get() : block;
-    }
 }

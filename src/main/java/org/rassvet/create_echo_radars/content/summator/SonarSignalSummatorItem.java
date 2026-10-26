@@ -1,6 +1,6 @@
 package org.rassvet.create_echo_radars.content.summator;
 
-import com.happysg.radar.compat.vs2.PhysicsHandler;
+import com.happysg.radar.api.physics.RadarPhysics;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
@@ -100,8 +100,8 @@ public final class SonarSignalSummatorItem extends BlockItem {
 
     public static boolean withinPlacementRange(Level level, BlockPos summator,
                                                BlockPos glass) {
-        return PhysicsHandler.getWorldPos(level, summator).getCenter().distanceToSqr(
-                PhysicsHandler.getWorldPos(level, glass).getCenter())
+        return RadarPhysics.worldBlockPos(level, summator).getCenter().distanceToSqr(
+                RadarPhysics.worldBlockPos(level, glass).getCenter())
                 <= SonarSignalSummatorBlock.MAX_GLASS_DISTANCE
                 * SonarSignalSummatorBlock.MAX_GLASS_DISTANCE;
     }

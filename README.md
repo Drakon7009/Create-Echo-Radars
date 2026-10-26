@@ -27,7 +27,7 @@ Sonar glass frames use Create's built-in connected textures; Fusion is not requi
 
 - Minecraft **1.21.1** with [NeoForge](https://neoforged.net/)
 - [Create](https://www.curseforge.com/minecraft/mc-mods/create) 6.0.10 or newer, below 6.1.0
-- [Create: Radars](https://www.curseforge.com/minecraft/mc-mods/create-radars) 0.4.9.4 or newer, below 6.0.0
+- [Create: Radars](https://www.curseforge.com/minecraft/mc-mods/create-radars) 5.0.1 or newer, below 6.0.0
 - [YetAnotherConfigLib (YACL)](https://www.curseforge.com/minecraft/mc-mods/yacl) 3.8.2 or newer on the client, for the configuration screen
 
 ## Mod support

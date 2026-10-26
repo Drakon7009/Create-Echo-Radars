@@ -45,15 +45,14 @@ public final class SonarGlassNetworkManager {
         Map<Long, SonarGlassBlockEntity> displays = new HashMap<>();
         NetworkData network = NetworkData.get(level);
         for (NetworkData.Group group : network.getGroupsByFiltererView().values()) {
-            if (group.radarPos == null || !(level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity sonar)
-                    || !isLiveSource(level, sonar)) {
-                continue;
-            }
-            if (!sonar.isEmitterSubmerged()) continue;
-            for (BlockPos endpoint : group.monitorEndpoints) {
-                SonarGlassBlockEntity display = displayEntity(level, endpoint);
-                if (display == null) continue;
-                addSource(sourcesByDisplay, displays, display, sonar);
+            for (SonarBlockEntity sonar : org.rassvet.create_echo_radars.compat.RadarsApi.sonars(
+                    level, group.key.filtererPos())) {
+                if (!isLiveSource(level, sonar) || !sonar.isEmitterSubmerged()) continue;
+                for (BlockPos endpoint : group.monitorEndpoints) {
+                    SonarGlassBlockEntity display = displayEntity(level, endpoint);
+                    if (display == null) continue;
+                    addSource(sourcesByDisplay, displays, display, sonar);
+                }
             }
         }
 

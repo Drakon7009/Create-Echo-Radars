@@ -26,7 +26,9 @@ public abstract class MonitorRendererMixin {
         SonarMonitorSnapshot snapshot =
                 ((SonarMonitorExtension) monitor).createEchoRadars$getSonarSnapshot();
         SonarMonitorExtension extension = (SonarMonitorExtension) monitor;
-        if (snapshot == null || !monitor.isController()
+        // Normal sonar rendering is registered through MonitorRadarRenderRegistry.
+        // Only opt-in synthetic performance fixtures need this fallback.
+        if (!extension.createEchoRadars$isSyntheticSnapshot() || snapshot == null || !monitor.isController()
                 || (!monitor.isLinked() && !extension.createEchoRadars$isSyntheticSnapshot())) return;
         if (RadarConfig.client().disableMonitorRendering.get()) {
             ci.cancel();

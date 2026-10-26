@@ -115,6 +115,14 @@ public final class CreateEchoRadars {
         BLOCK_ENTITIES.register(modBus);
         MENUS.register(modBus);
         ModNetworking.register(modBus);
+        org.rassvet.create_echo_radars.compat.SonarDataLinks.register();
+        com.happysg.radar.api.monitor.MonitorWorldHitTestRegistry.register(
+                org.rassvet.create_echo_radars.compat.RadarsApi.SONAR,
+                org.rassvet.create_echo_radars.compat.SonarMonitorHitTest::findContact);
+        net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                (com.happysg.radar.api.network.RadarNetworkControllerMovedEvent event) ->
+                        org.rassvet.create_echo_radars.content.glass.SonarGlassNetworkManager.get(event.level())
+                                .remapFilterer(event.previousPosition(), event.position(), event.level().getGameTime()));
         modBus.addListener(org.rassvet.create_echo_radars.compat.RadarInventory::addItems);
         if (FMLEnvironment.dist == Dist.CLIENT) {
             ClientEvents.register(modBus, container);

@@ -1,6 +1,6 @@
 package org.rassvet.create_echo_radars.client;
 
-import com.happysg.radar.compat.vs2.PhysicsHandler;
+import com.happysg.radar.api.physics.RadarPhysics;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import com.mojang.blaze3d.vertex.BufferUploader;
@@ -577,7 +577,7 @@ public final class SonarGlassOverlay {
 
     private static Vec3 world(SonarGlassBlockEntity endpoint, Vec3 localPosition) {
         return endpoint.getLevel() == null ? localPosition
-                : PhysicsHandler.getWorldVec(endpoint.getLevel(), localPosition);
+                : RadarPhysics.worldPosition(endpoint.getLevel(), localPosition);
     }
 
     private static void renderPulses(RenderLevelStageEvent event) {
