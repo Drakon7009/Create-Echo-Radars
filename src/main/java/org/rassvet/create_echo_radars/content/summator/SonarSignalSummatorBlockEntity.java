@@ -2,6 +2,8 @@ package org.rassvet.create_echo_radars.content.summator;
 
 import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.controller.networkcontroller.NetworkFiltererBlockEntity;
+import com.happysg.radar.api.network.RadarNetworkApi;
+import org.rassvet.create_echo_radars.compat.RadarsApi;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
@@ -80,11 +82,8 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
             BlockPos sonarPos = null;
             if (filterer != null && level.hasChunkAt(filterer)
                     && level.getBlockEntity(filterer) instanceof NetworkFiltererBlockEntity) {
-                NetworkData.Group group = data.getGroup(level.dimension(), filterer);
-                if (group != null && group.radarPos != null && level.hasChunkAt(group.radarPos)
-                        && level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity) {
-                    sonarPos = group.radarPos;
-                }
+                sonarPos = RadarsApi.sonars(level, filterer).stream()
+                        .map(SonarBlockEntity::getBlockPos).findFirst().orElse(null);
             }
             if (!java.util.Objects.equals(linkedSonarPositions[slot], sonarPos)) {
                 linkedSonarPositions[slot] = sonarPos == null ? null : sonarPos.immutable();
@@ -100,9 +99,11 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
         for (int slot = 0; slot < filterers.length; slot++) {
             BlockPos filterer = filterers[slot];
             if (filterer == null) continue;
-            NetworkData.Group group = data.getGroup(level.dimension(), filterer);
-            if (group != null && sonarPos.equals(group.radarPos)) {
+            if (RadarsApi.sonars(level, filterer).stream()
+                    .noneMatch(sonar -> !sonar.getBlockPos().equals(sonarPos))) {
                 updated |= 1 << slot;
+            } else {
+                updated &= ~(1 << slot);
             }
         }
         if (updated != brokenSlots) {
@@ -125,17 +126,11 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
                 updated |= 1 << slot;
                 continue;
             }
-            NetworkData.Group group = data.getGroup(level.dimension(), filterer);
-            if (group == null || group.radarPos == null) {
-                updated |= 1 << slot;
-                continue;
-            }
-            BlockPos sonarPos = group.radarPos;
-            if (!level.hasChunkAt(sonarPos)) {
+            var positions = RadarNetworkApi.getRadarPositions(level, filterer);
+            if (!RadarsApi.sonars(level, filterer).isEmpty()) continue;
+            if (positions.stream().anyMatch(pos -> !level.hasChunkAt(pos))) {
                 updated |= brokenSlots & (1 << slot);
-            } else if (!(level.getBlockEntity(sonarPos) instanceof SonarBlockEntity sonar)
-                    || sonar.isRemoved()
-                    || !(level.getBlockState(sonarPos).getBlock() instanceof SonarBlock)) {
+            } else {
                 updated |= 1 << slot;
             }
         }
@@ -184,11 +179,8 @@ public final class SonarSignalSummatorBlockEntity extends BlockEntity {
         for (BlockPos filterer : filterers) {
             if (filterer == null || !(level.getBlockEntity(filterer)
                     instanceof NetworkFiltererBlockEntity)) continue;
-            NetworkData.Group group = data.getGroup(level.dimension(), filterer);
-            if (group != null && group.radarPos != null
-                    && level.getBlockEntity(group.radarPos) instanceof SonarBlockEntity sonar) {
-                sonars.add(sonar);
-            }
+            for (SonarBlockEntity sonar : RadarsApi.sonars(level, filterer))
+                if (!sonars.contains(sonar)) sonars.add(sonar);
         }
         return List.copyOf(sonars);
     }

@@ -73,6 +73,7 @@ public final class ClientEvents {
     }
 
     private static void registerPonder(FMLClientSetupEvent event) {
+        event.enqueueWork(org.rassvet.create_echo_radars.client.RadarsClientIntegration::register);
         PonderIndex.addPlugin(new EchoRadarsPonderPlugin());
     }
 }

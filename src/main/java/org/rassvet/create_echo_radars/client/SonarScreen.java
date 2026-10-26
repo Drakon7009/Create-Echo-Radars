@@ -147,7 +147,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
                 }));
 
         mirrorDisplayButton = addRenderableWidget(new IconToggleButton(leftPos + 44, footerY,
-                101, 120, () -> draftMirrorDisplay, mirrorDisplayMessage(), () -> {
+                101, 120, 19, () -> draftMirrorDisplay, mirrorDisplayMessage(), () -> {
                     draftMirrorDisplay = !draftMirrorDisplay;
                     mirrorDisplayButton.setMessage(mirrorDisplayMessage());
                 }));
@@ -573,7 +573,12 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
 
         private IconToggleButton(int x, int y, int iconU, int selectedIconU, BooleanSupplier selected,
                                  Component message, Runnable onPress) {
-            super(x, y, 18, 19, message);
+            this(x, y, iconU, selectedIconU, 18, selected, message, onPress);
+        }
+
+        private IconToggleButton(int x, int y, int iconU, int selectedIconU, int width,
+                                 BooleanSupplier selected, Component message, Runnable onPress) {
+            super(x, y, width, 19, message);
             this.iconU = iconU;
             this.selectedIconU = selectedIconU;
             this.selected = selected;
@@ -607,7 +612,7 @@ public class SonarScreen extends AbstractContainerScreen<SonarMenu> {
             int sourceV = pressed ? 188
                     : selected.getAsBoolean() || isHoveredOrFocused() ? 207 : 188;
             graphics.blit(TEXTURE, getX(), getY(), sourceU, sourceV,
-                    18, 19, TEXTURE_WIDTH, TEXTURE_HEIGHT);
+                    getWidth(), getHeight(), TEXTURE_WIDTH, TEXTURE_HEIGHT);
         }
     }
 

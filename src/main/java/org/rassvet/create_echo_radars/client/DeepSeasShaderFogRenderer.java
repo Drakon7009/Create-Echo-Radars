@@ -29,7 +29,7 @@ public final class DeepSeasShaderFogRenderer {
 
     public static void registerShader(RegisterShadersEvent event) {
         try {
-            event.registerShader(new ShaderInstance(event.getResourceProvider(),
+            event.registerShader(new PostCompositeShader(event.getResourceProvider(),
                     SHADER, DefaultVertexFormat.POSITION), loaded -> shader = loaded);
         } catch (IOException exception) {
             throw new IllegalStateException("Failed to register " + SHADER, exception);

@@ -94,6 +94,14 @@ public final class SonarMonitorRenderer {
         renderContents(monitor, snapshot, poseStack, buffers, partialTick, hoveredTrackId, true);
     }
 
+    /** Radars supplies a pose stack already oriented onto the monitor face. */
+    public static void renderOnMonitorFace(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
+                                           PoseStack poseStack, MultiBufferSource buffers, float partialTick) {
+        // Cover the base grid which Radars draws before invoking addon renderers.
+        poseStack.translate(0, 0.02, 0);
+        renderContents(monitor, snapshot, poseStack, buffers, partialTick, null, false);
+    }
+
     public static float echoSounderDepthAt(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
                                            double x, double z) {
         if (snapshot.sonarType()

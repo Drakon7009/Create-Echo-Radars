@@ -41,9 +41,16 @@ public final class IrisWaterFogPatcher {
             s = s.substring(0, start) + call + s.substring(end + 2);
         } else if (s.contains("vec3 underwaterMult = vec3(0.80, 0.87, 0.97)")
                 && s.contains("float GetWaterFog(")) {
+            String patchedMain = function(s, "main", body -> body.replace(
+                    "if (isEyeInWater == 1) {\n        if (z0 == 1.0) color.rgb = waterFogColor;",
+                    "if (cerEye(isEyeInWater) == 1) {\n"
+                    + "        if (cerVirtualWater()) color.rgb = mix(color.rgb, waterFogColor, GetWaterFog(cerWaterDistance(lViewPos1)));\n"
+                    + "        if (z0 == 1.0) color.rgb = waterFogColor;"));
+            // Included fog helpers have their own underwater branches, but no local
+            // color or lViewPos1. Only patch the known colour-composition site.
+            if (patchedMain.equals(s)) return new Result(original, null);
             family = "Complementary";
-            s = s.replace("if (isEyeInWater == 1) {", "if (cerEye(isEyeInWater) == 1) {\n"
-                    + "        if (cerVirtualWater()) color.rgb = mix(color.rgb, waterFogColor, GetWaterFog(cerWaterDistance(lViewPos1)));\n");
+            s = patchedMain;
             s = s.replace("pow(fogColor, vec3(0.33, 0.21, 0.26))",
                     "pow(cerBiomeFog(fogColor), vec3(0.33, 0.21, 0.26))");
         } else if (s.contains("waterVolumetrics(vl, vec3(0.0), viewPos0")

@@ -8,7 +8,7 @@ import com.happysg.radar.block.behavior.networks.NetworkData;
 import com.happysg.radar.block.radar.behavior.IRadar;
 import com.happysg.radar.block.radar.behavior.RadarScanningBlockBehavior;
 import com.happysg.radar.block.radar.track.RadarTrack;
-import com.happysg.radar.compat.vs2.PhysicsHandler;
+import com.happysg.radar.api.physics.RadarPhysics;
 import com.simibubi.create.content.kinetics.base.KineticBlockEntity;
 import com.simibubi.create.infrastructure.config.AllConfigs;
 import com.simibubi.create.foundation.blockEntity.behaviour.BlockEntityBehaviour;
@@ -36,6 +36,17 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import org.jetbrains.annotations.Nullable;
 import org.rassvet.create_echo_radars.config.ServerConfig;
+import org.rassvet.create_echo_radars.compat.RadarsApi;
+import com.happysg.radar.api.network.RadarNetworkApi;
+import com.happysg.radar.api.monitor.MonitorRadarData;
+import com.happysg.radar.api.monitor.MonitorRadarDataProvider;
+import com.happysg.radar.api.monitor.MonitorSyncIntervalProvider;
+import com.happysg.radar.api.radar.RadarDisplayProfile;
+import com.happysg.radar.api.radar.RadarDetectionSettings;
+import com.happysg.radar.api.radar.RadarDetectionConfigurable;
+import com.happysg.radar.api.radar.scan.RadarScanPolicy;
+import com.happysg.radar.api.radar.scan.RadarScanPolicyProvider;
+import com.happysg.radar.api.radar.scan.RadarVisibilityResult;
 import org.rassvet.create_echo_radars.config.SyncedServerConfig;
 
 import java.nio.charset.StandardCharsets;
@@ -48,7 +59,8 @@ import java.util.Set;
 import java.util.UUID;
 
 public class SonarBlockEntity extends KineticBlockEntity
-        implements IRadar, SonarDataSource, MenuProvider, INetworkNode {
+        implements IRadar, SonarDataSource, MenuProvider, INetworkNode,
+        MonitorRadarDataProvider, MonitorSyncIntervalProvider, RadarScanPolicyProvider, RadarDetectionConfigurable {
     public static final int MIN_RANGE = 16;
     public static final int MAX_RANGE = ServerConfig.DEFAULT_MAXIMUM_SONAR_RANGE;
     public static final int MIN_SECTOR = 15;
@@ -63,6 +75,7 @@ public class SonarBlockEntity extends KineticBlockEntity
     private final SonarEntityVisibilityCache entityVisibilityCache =
             new SonarEntityVisibilityCache(ENTITY_VISIBILITY_CACHE_TICKS);
     private RadarScanningBlockBehavior scanningBehavior;
+    private RadarDetectionSettings detectionSettings = new RadarDetectionSettings(true, true, true, true, true, true, true);
     private int range = MAX_RANGE;
     private int horizontalSector;
     private int verticalSector;
@@ -121,7 +134,7 @@ public class SonarBlockEntity extends KineticBlockEntity
                 SonarOrientation unTilted = unTiltedOrientation(scanAngle);
                 SonarOrientation scanOrientation = applyTilt(unTilted, tiltAngle);
                 Vec3 localCenter = Vec3.atCenterOf(worldPosition);
-                Vec3 worldCenter = PhysicsHandler.getWorldVec(level, localCenter);
+                Vec3 worldCenter = RadarPhysics.worldPosition(level, localCenter);
                 Vec3 scanOrigin = emitterPosition(worldCenter, getSonarType(), unTilted, scanAngle);
                 scanEntitiesAtScanStart(scanOrigin, scanOrientation, getSonarRange(),
                         Math.round(SonarRotation.MECHANICAL_SCAN_STEP_DEGREES),
@@ -142,7 +155,7 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     private void updateNetworkPosition(ServerLevel serverLevel) {
         if (lastKnownNetworkPos.equals(worldPosition)) return;
-        if (NetworkData.get(serverLevel).updateRadarPosition(serverLevel.dimension(),
+        if (RadarNetworkApi.moveRadarEndpoint(serverLevel,
                 lastKnownNetworkPos, worldPosition)) {
             lastKnownNetworkPos = worldPosition.immutable();
             setChanged();
@@ -169,6 +182,7 @@ public class SonarBlockEntity extends KineticBlockEntity
         int scanYRange = displayYRange(scanRange, scanAutoHeight, verticalAngle, tiltAngle);
         net.minecraft.world.phys.AABB bounds = new net.minecraft.world.phys.AABB(origin, origin).inflate(scanRange);
         for (Entity entity : level.getEntities((Entity) null, bounds, Entity::isAlive)) {
+            if (!detects(com.happysg.radar.block.radar.track.TrackCategory.get(entity))) continue;
             Vec3 target = entity.getBoundingBox().getCenter();
             Vec3 relative = target.subtract(origin);
             if (!insideScanVolume(relative, orientation, horizontalAngle, verticalAngle, scanRange)) continue;
@@ -226,14 +240,14 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     public Vec3 emitterPosition() {
         Vec3 localCenter = Vec3.atCenterOf(worldPosition);
-        Vec3 worldCenter = level == null ? localCenter : PhysicsHandler.getWorldVec(level, localCenter);
+        Vec3 worldCenter = level == null ? localCenter : RadarPhysics.worldPosition(level, localCenter);
         return emitterPosition(worldCenter, getSonarType(), unTiltedOrientation(), mechanicalAngle);
     }
 
     public Vec3 displayOrigin() {
         if (getSonarType() != SonarType.MECHANICAL_IMAGING_C) return emitterPosition();
         Vec3 localCenter = Vec3.atCenterOf(worldPosition);
-        Vec3 worldCenter = level == null ? localCenter : PhysicsHandler.getWorldVec(level, localCenter);
+        Vec3 worldCenter = level == null ? localCenter : RadarPhysics.worldPosition(level, localCenter);
         return worldCenter.add(unTiltedOrientation().up().scale(0.25));
     }
 
@@ -324,7 +338,7 @@ public class SonarBlockEntity extends KineticBlockEntity
 
     @Override
     public Collection<RadarTrack> getTracks() {
-        if (scanningBehavior == null) return List.copyOf(entityTracks.values());
+        if (scanningBehavior == null) return entityTracks.values().stream().filter(track -> detects(track.trackCategory())).toList();
         Vec3 origin = emitterPosition();
         SonarOrientation orientation = orientation();
         java.util.stream.Stream<RadarTrack> sableTracks = (getSonarType() == SonarType.MECHANICAL_IMAGING_C
@@ -337,6 +351,7 @@ public class SonarBlockEntity extends KineticBlockEntity
                         <= displayYRange())
                 .filter(track -> isSableTrackVisible(track.id(), origin, track.position()));
         return java.util.stream.Stream.concat(entityTracks.values().stream(), sableTracks)
+                .filter(track -> detects(track.trackCategory()))
                 .collect(java.util.stream.Collectors.toMap(RadarTrack::id, track -> track,
                         (first, second) -> first))
                 .values();
@@ -506,17 +521,68 @@ public class SonarBlockEntity extends KineticBlockEntity
         return "sonar";
     }
 
-    // Radars 5.0-EA added these IRadar methods. They are harmless on 0.4.9.4.
+    @Override
+    public RadarDisplayProfile getRadarDisplayProfile() {
+        return RadarsApi.DISPLAY;
+    }
+
+    @Override
+    public MonitorRadarData getMonitorRadarData() {
+        if (!(level instanceof ServerLevel serverLevel)) return MonitorRadarData.empty();
+        SonarScanManager manager = SonarScanManager.get(serverLevel);
+        manager.touch(this);
+        return RadarsApi.data(manager.snapshot(worldPosition));
+    }
+
+    @Override
+    public int getMonitorSyncIntervalTicks() {
+        return getSonarType() == SonarType.MECHANICAL_IMAGING_C
+                ? Math.min(5, SonarRotation.mechanicalUpdateIntervalTicks(mechanicalAngularSpeed())) : 5;
+    }
+
+    @Override
+    public RadarScanPolicy getRadarScanPolicy() {
+        // Echo Radars applies its configurable acoustic visibility check after collection.
+        return (serverLevel, sensor, target) -> RadarVisibilityResult.VISIBLE;
+    }
+
+    @Override
+    public void applyRadarDetectionSettings(RadarDetectionSettings settings) {
+        if (settings == null) return;
+        detectionSettings = settings;
+        // Other entity types are collected by the acoustic scanner above.
+        if (scanningBehavior != null)
+            scanningBehavior.setScanFlags(false, settings.sable(), false, false, false, false, false);
+        entityTracks.values().removeIf(track -> !detects(track.trackCategory()));
+    }
+
+    private boolean detects(com.happysg.radar.block.radar.track.TrackCategory category) {
+        return switch (category) {
+            case PLAYER -> detectionSettings.player();
+            case SABLE -> detectionSettings.sable();
+            case CONTRAPTION -> detectionSettings.contraption();
+            case MOB, HOSTILE -> detectionSettings.mob();
+            case PROJECTILE -> detectionSettings.projectile();
+            case ANIMAL -> detectionSettings.animal();
+            case ITEM -> detectionSettings.item();
+            case MISSILE -> true;
+            default -> false;
+        };
+    }
+
+    @Override
     public UUID getEmitterId() {
         String dimension = level == null ? "unknown" : level.dimension().location().toString();
         String identity = dimension + ":" + worldPosition.asLong();
         return UUID.nameUUIDFromBytes(identity.getBytes(StandardCharsets.UTF_8));
     }
 
+    @Override
     public RadarType getRadarTypeEnum() {
         return RadarType.GROUND;
     }
 
+    @Override
     public RwrContactEvaluation evaluateRwrContact(ServerLevel serverLevel,
                                                     RwrTargetReference receiver,
                                                     RwrTargetReference lockTarget) {

@@ -1,12 +1,7 @@
-package org.rassvet.create_echo_radars.mixin;
+package org.rassvet.create_echo_radars.compat;
 
-import com.happysg.radar.block.monitor.MonitorBlock;
 import com.happysg.radar.block.monitor.MonitorBlockEntity;
-import com.happysg.radar.block.monitor.MonitorInputHandler;
 import com.happysg.radar.block.radar.track.RadarTrack;
-import com.happysg.radar.compat.vs2.PhysicsHandler;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import org.rassvet.create_echo_radars.content.sonar.SonarMonitorSnapshot;
 import org.rassvet.create_echo_radars.content.sonar.EchoSounderDepth;
@@ -16,35 +11,27 @@ import org.rassvet.create_echo_radars.content.sonar.SonarDisplayLayout;
 import org.rassvet.create_echo_radars.content.sonar.SonarDisplayProjection;
 import org.rassvet.create_echo_radars.content.sonar.SonarMath;
 import org.rassvet.create_echo_radars.content.sonar.SonarOrientation;
-import org.spongepowered.asm.mixin.Mixin;
-import org.spongepowered.asm.mixin.injection.At;
-import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-@Mixin(value = MonitorInputHandler.class, remap = false)
-public abstract class MonitorInputHandlerMixin {
-    @Inject(method = "findTrack", at = @At("HEAD"), cancellable = true)
-    private static void createEchoRadars$findSonarTrack(Level level, Vec3 hit, MonitorBlockEntity monitor,
-                                                        CallbackInfoReturnable<RadarTrack> cir) {
-        SonarMonitorSnapshot snapshot =
-                ((SonarMonitorExtension) monitor).createEchoRadars$getSonarSnapshot();
-        if (snapshot == null) return;
+public final class SonarMonitorHitTest {
+    public static com.happysg.radar.api.monitor.MonitorContactSnapshot findContact(
+            com.happysg.radar.api.monitor.MonitorWorldHitTestContext context) {
+        if (!(context.level().getBlockEntity(context.monitorPos()) instanceof MonitorBlockEntity monitor)) return null;
+        for (var radar : context.radars()) {
+            if (!radar.data().has(RadarsApi.SONAR)) continue;
+            SonarMonitorSnapshot snapshot = RadarsApi.snapshot(radar);
+            if (snapshot == null) continue;
+            RadarTrack track = findTrack(monitor, snapshot, -context.normalizedX(), -context.normalizedZ());
+            if (track != null) return new com.happysg.radar.api.monitor.MonitorContactSnapshot(
+                    track.id(), track.position(), true, RadarsApi.SONAR.toString());
+        }
+        return null;
+    }
 
-        hit = PhysicsHandler.getShipVec(hit, monitor);
-
-        Direction widthDirection = level.getBlockState(monitor.getControllerPos())
-                .getValue(MonitorBlock.FACING).getClockWise();
-        Direction monitorFacing = level.getBlockState(monitor.getControllerPos()).getValue(MonitorBlock.FACING);
-        SonarMonitorDimensions dimensions =
-                ((SonarMonitorExtension) monitor).createEchoRadars$getMonitorDimensions();
-        Vec3 center = Vec3.atCenterOf(monitor.getControllerPos())
-                .add(widthDirection.getStepX() * (dimensions.width() - 1) / 2.0,
-                        (dimensions.height() - 1) / 2.0,
-                        widthDirection.getStepZ() * (dimensions.width() - 1) / 2.0);
-        Vec3 local = adjustForFacing(hit.subtract(center), monitorFacing);
-        double clickedX = local.x / (dimensions.width() * 0.5);
+    private static RadarTrack findTrack(MonitorBlockEntity monitor, SonarMonitorSnapshot snapshot,
+                                         double clickedX, double clickedZ) {
+        // The public context already accounts for the single-monitor render scale.
         if (snapshot.mirrorDisplay()) clickedX = -clickedX;
-        double clickedZ = local.z / (dimensions.height() * 0.5);
+        SonarMonitorDimensions dimensions = ((SonarMonitorExtension) monitor).createEchoRadars$getMonitorDimensions();
 
         RadarTrack best = null;
         double bestDistance = 0.025;
@@ -100,16 +87,7 @@ public abstract class MonitorInputHandlerMixin {
                 best = track;
             }
         }
-        cir.setReturnValue(best);
+        return best;
     }
 
-    private static Vec3 adjustForFacing(Vec3 relative, Direction facing) {
-        return switch (facing) {
-            case NORTH -> new Vec3(relative.x, 0, relative.y);
-            case SOUTH -> new Vec3(-relative.x, 0, relative.y);
-            case WEST -> new Vec3(relative.z, 0, relative.y);
-            case EAST -> new Vec3(-relative.z, 0, relative.y);
-            default -> relative;
-        };
-    }
 }

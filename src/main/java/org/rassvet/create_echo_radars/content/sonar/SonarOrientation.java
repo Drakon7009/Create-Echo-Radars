@@ -1,6 +1,6 @@
 package org.rassvet.create_echo_radars.content.sonar;
 
-import com.happysg.radar.compat.vs2.PhysicsHandler;
+import com.happysg.radar.api.physics.RadarPhysics;
 import net.minecraft.core.Direction;
 import net.minecraft.world.phys.Vec3;
 
@@ -23,9 +23,9 @@ public record SonarOrientation(Vec3 forward, Vec3 right, Vec3 up) {
         Vec3 localRight = Vec3.atLowerCornerOf(facing.getClockWise().getNormal());
         Vec3 localUp = new Vec3(0, 1, 0);
         return new SonarOrientation(
-                PhysicsHandler.getWorldVecDirectionTransform(localForward, sonar),
-                PhysicsHandler.getWorldVecDirectionTransform(localRight, sonar),
-                PhysicsHandler.getWorldVecDirectionTransform(localUp, sonar));
+                RadarPhysics.worldDirection(localForward, sonar),
+                RadarPhysics.worldDirection(localRight, sonar),
+                RadarPhysics.worldDirection(localUp, sonar));
     }
 
     public static SonarOrientation flatFromForward(Vec3 forward) {

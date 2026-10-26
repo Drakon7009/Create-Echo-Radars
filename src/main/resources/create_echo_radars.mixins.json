@@ -6,16 +6,11 @@
   "mixins": [
     "RadarCreativeTabMixin",
     "DeepSeasHullStrengthConfigMixin",
-    "DataLinkBlockItemMixin",
     "GuidedFuzeTorpedoMixin",
-    "MonitorBlockEntityMixin",
-    "MonitorInputHandlerMixin",
-    "NetworkFiltererBlockEntityMixin",
-    "RadarScanningBlockBehaviorMixin"
+    "MonitorBlockEntityMixin"
   ],
   "client": [
     "RadarCreativeInventoryScreenMixin",
-    "MonitorBlockClientMixin",
     "MonitorRendererMixin",
     "CopycatSonarGlassOcclusionMixin",
     "IrisSonarPostRenderMixin",

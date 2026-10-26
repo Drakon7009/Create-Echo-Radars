@@ -30,7 +30,7 @@ public final class SonarGlassVanillaDepthRenderer {
 
     public static void registerShader(RegisterShadersEvent event) {
         try {
-            event.registerShader(new ShaderInstance(event.getResourceProvider(),
+            event.registerShader(new PostCompositeShader(event.getResourceProvider(),
                     SHADER, DefaultVertexFormat.POSITION), loaded -> shader = loaded);
         } catch (java.io.IOException exception) {
             throw new IllegalStateException(
